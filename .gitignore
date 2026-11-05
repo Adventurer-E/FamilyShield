@@ -163,3 +163,6 @@ dist/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Server writes CSVs via temp files, then renames them
+data/*.tmp

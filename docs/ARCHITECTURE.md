@@ -30,13 +30,45 @@ and the **partner bank**, which owns identity, accounts and money movement.
 
 | Package | Role | Depends on |
 | --- | --- | --- |
-| `@familyshield/core` | Business rules as pure functions over a `LoanCase` | nothing |
-| `@familyshield/sdk` | UI module, API adapters, host bridge | core, React |
+| `@familyshield/core` | Business rules as pure functions over a `LoanCase`; rules are a `Rules` object | nothing |
+| `@familyshield/service` | The backend: every API operation over the CSV database | core |
+| `@familyshield/server` | Node `http` server exposing the service as the REST API | service, core |
+| `@familyshield/sdk` | UI module, API adapters, host bridge, functional-mockup hosts | core, service, React |
 | `@familyshield/demo-bank` | Fictional host app (“BlueRiver Bank”) | sdk, core |
 
-The service (not in this repo yet) should import `@familyshield/core` too, so
-the client preview and the server’s source of truth can never disagree about a
-fee or a due date.
+The UI, the server and the in-browser backend all import `@familyshield/core`,
+so the client preview and the backend’s source of truth can never disagree
+about a fee or a due date.
+
+## The functional-mockup backend
+
+```
+            ┌────────────── npm run dev ──────────────┐     ┌──────── GitHub Pages ────────┐
+ Bank app ─►│ HttpApi ──HTTP──► packages/server       │     │ createBrowserMockup()        │
+ (SDK)      │                    │                    │     │   │                          │
+            │                    ▼                    │     │   ▼                          │
+            │            FamilyShieldService ◄────────┼─────┼─► FamilyShieldService        │
+            │                    │ CsvStorage         │     │   │ CsvStorage               │
+            │                    ▼                    │     │   ▼                          │
+            │      data/*.csv on disk (read+write)    │     │ data/*.csv bundled at build  │
+            └─────────────────────────────────────────┘     │ + activity in localStorage   │
+                                                            └──────────────────────────────┘
+```
+
+- **Every call re-reads the CSVs**, so hand edits take effect immediately.
+  At mockup scale (a few hundred rows) this costs well under a millisecond.
+- **Setup tables are never written** by the app; only activity tables are.
+  Writes go to a temp file that is then renamed into place, so a crash can’t
+  leave a half-written CSV.
+- **Scripted relatives** (`auto_replies.csv`) are evaluated from timestamps
+  (“reply 2.5 s after the request was created”), not stored timers, so
+  restarting the server or reloading the page loses nothing. Hosts call
+  `service.tick()` every 500 ms.
+- **The seam for production** is the `CsvStorage` interface (`read()` /
+  `write()`). A real deployment replaces it, and the CSV mapping, with a
+  database repository; the service’s operations and the core rules stay.
+- Mockup authentication is `Authorization: Bearer <person id>`. It stands in
+  for the bank-minted tokens described in INTEGRATION.md.
 
 ## The loan lifecycle
 
@@ -72,9 +104,9 @@ bank, which debits and credits accounts through its own rails.
 - At **each payment**, the bank debits the borrower’s installment, credits each
   lender their part, and credits FamilyShield the fee portion.
 
-In the functional mockup, the mock backend simulates exactly these ledger
-postings (`settle()` in `sdk/src/api/mock/backend.ts`), which is why
-BlueRiver’s balances move.
+In the functional mockup, the service simulates exactly these ledger
+postings (`settle()` in `packages/service/src/service.ts`) as rows in
+`data/transactions.csv`, which is why BlueRiver’s balances move.
 
 `HostEvent`s such as `loan.funded` and `payment.made` are **UI hints**, so the
 host can refresh balances or show a toast. They must never trigger money

@@ -1,0 +1,21 @@
+{
+  "name": "@familyshield/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FamilyShield functional-mockup backend: the REST API from docs/API.md over the CSV files in data/.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@familyshield/core": "0.1.0",
+    "@familyshield/service": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.9.0",
+    "tsx": "4.19.2",
+    "typescript": "5.6.3"
+  }
+}

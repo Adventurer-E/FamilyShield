@@ -19,7 +19,7 @@ export function AgreementDoc(props: { agreement: AgreementT; months: number; bor
         rows={[
           ['Loan amount', formatMoney(a.principal)],
           ['Interest', `${a.interestRate}%`],
-          ['Service fee (5%)', formatMoney(a.fee)],
+          [`Service fee (${a.principal ? +((a.fee / a.principal) * 100).toFixed(2) : 0}%)`, formatMoney(a.fee)],
           ['Total to repay', <strong key="t">{formatMoney(a.total)}</strong>],
           ['Monthly payment', `about ${formatMoney(monthly)} × ${months}`],
           ['Schedule', `${formatDate(start, false)} – ${formatDate(addMonths(start, months - 1))}`],
@@ -42,9 +42,9 @@ export function AgreementDoc(props: { agreement: AgreementT; months: number; bor
 
 /** Borrower's view: preview and sign (collecting), then wait for lenders (signing). */
 export function Agreement({ loan }: { loan: LoanCase }) {
-  const { api, run, go, nameOf } = useFs();
+  const { api, run, go, nameOf, data } = useFs();
   const signed = loan.status !== 'collecting';
-  const agreements = signed ? loan.agreements : draftAgreements(loan);
+  const agreements = signed ? loan.agreements : draftAgreements(loan, data.config.rules);
   const fee = sum(agreements.map((a) => a.fee));
   const total = sum(agreements.map((a) => a.total));
   const waitingOn = loan.agreements.filter((a) => !a.lenderSignedAt).map((a) => nameOf(a.lenderId));

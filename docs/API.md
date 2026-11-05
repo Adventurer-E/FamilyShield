@@ -1,12 +1,15 @@
 # FamilyShield service API (v1)
 
-This is the contract `HttpApi` (`packages/sdk/src/api/http.ts`) expects. The
-service doesn’t exist yet; this document is its spec. The mock backend
-(`createMockBackend`) implements the same behavior in the browser.
+This is the contract `HttpApi` (`packages/sdk/src/api/http.ts`) expects.
+`packages/server` implements it for the functional mockup, on top of the CSV
+files in `data/`; a production service would implement the same contract on a
+real database.
 
 - Base URL: `https://api.familyshield.example/v1`
 - Auth: `Authorization: Bearer <short-lived customer token>` on every call
-  (see [INTEGRATION.md](INTEGRATION.md#1-authentication))
+  (see [INTEGRATION.md](INTEGRATION.md#1-authentication)). In the functional
+  mockup the token is simply a person’s `id` from `data/people.csv`, e.g.
+  `Bearer alex`.
 - Bodies: JSON. Money is **integer cents**. Dates are ISO strings.
 - Every `POST` that changes a loan returns the updated `LoanCase`, redacted
   for the caller.
@@ -39,6 +42,7 @@ in `packages/core/src/types.ts`. `Profile` is defined in
 
 | Method & path | Returns | Notes |
 | --- | --- | --- |
+| `GET /config` | `AppConfig` | `{ rules, rewards }`: the fee, limits, terms, points and reward catalog in force (from `settings.csv` and `rewards.csv` in the mockup). No auth needed |
 | `GET /me` | `Profile` | The caller, their circle, the people they may see, and their linked account |
 | `GET /me/loan` | `LoanCase \| null` | The caller’s latest loan as borrower (excluding cancelled) |
 | `GET /me/incoming` | `LoanCase[]` | Requests the caller was asked on, **redacted** for a lender, newest first |
@@ -63,6 +67,30 @@ in `packages/core/src/types.ts`. `Profile` is defined in
 | `POST /loans/:id/responses` | `{ kind: 'offer', amount, note? }` or `{ kind: 'decline', note? }` | `respondToRequest` |
 | `POST /loans/:id/lender-signature` | — | `signAsLender`; the last signature triggers funding |
 | `POST /loans/:id/pause/responses` | `{ approve: boolean }` | `respondToPause` |
+
+### Functional mockup only
+
+These stand in for the bank’s own systems and are **not** part of the production contract.
+
+| Method & path | Returns | Notes |
+| --- | --- | --- |
+| `GET /mockup/people` | `MockupPerson[]` | Everyone in `people.csv`, for the “Viewing as” menu |
+| `GET /mockup/accounts/:userId` | `AccountSummary` | `{ balance, transactions }`: the opening balance plus `transactions.csv` |
+| `POST /mockup/reset` | `204` | Empties every activity table (setup tables untouched) |
+
+If a CSV can’t be read, every call returns `500` with
+`{ "error": { "code": "DATA_ERROR", "message": "people.csv, line 3, column \"opening_balance\": …" } }`.
+
+### Try it with curl
+
+```bash
+npm run dev:server
+curl localhost:8787/v1/config
+curl -H 'Authorization: Bearer alex' localhost:8787/v1/me
+curl -X POST -H 'Authorization: Bearer alex' -H 'Content-Type: application/json' \
+     -d '{"reason":"car","purpose":"Car repair","amount":150000,"months":10}' localhost:8787/v1/loans
+cat data/loans.csv
+```
 
 ## Server responsibilities beyond the core rules
 

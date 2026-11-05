@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { mountFamilyShield } from '@familyshield/sdk';
 import type { BridgeMessage, HostEvent, InitMessage } from '@familyshield/sdk';
-import { backend } from './backend';
+import { host } from './host';
 
 export type EmbedMode = 'inline' | 'webview';
 
@@ -23,7 +23,7 @@ export function FamilyShieldSheet(props: { userId: string; mode: EmbedMode; onCl
   useEffect(() => {
     if (mode !== 'inline' || !mountRef.current) return;
     const handle = mountFamilyShield(mountRef.current, {
-      api: backend.apiFor(userId),
+      api: host.apiFor(userId),
       demo: true,
       onEvent: (event) => (event.type === 'close' ? handlers.current.onClose() : handlers.current.onEvent(event)),
     });

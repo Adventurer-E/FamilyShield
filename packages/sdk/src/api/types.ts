@@ -1,4 +1,6 @@
-import type { Cents, LenderResponse, LoanCase, Person, Reason } from '@familyshield/core';
+import type { AppConfig, CreateRequestInput, LenderResponse, LoanCase, Profile } from '@familyshield/core';
+
+export type { AppConfig, CreateRequestInput, Profile };
 
 /**
  * The contract between the FamilyShield UI and a backend. Every call is made
@@ -7,10 +9,14 @@ import type { Cents, LenderResponse, LoanCase, Person, Reason } from '@familyshi
  * lender only sees the request and their own answer and agreement.
  *
  * Two implementations ship with the SDK:
- *  - `createMockBackend().apiFor(userId)`: in-browser, for demos and tests
- *  - `HttpApi`: talks to the FamilyShield service (see docs/API.md)
+ *  - `HttpApi`: talks to a FamilyShield backend over HTTP (docs/API.md), e.g.
+ *    the functional-mockup server in packages/server
+ *  - `createBrowserMockup().apiFor(userId)`: the same backend logic running
+ *    in the browser, over CSV files kept in localStorage
  */
 export interface FamilyShieldApi {
+  /** Rules (fee, limits, terms, points) and the reward catalog the backend runs with. */
+  getConfig(): Promise<AppConfig>;
   getProfile(): Promise<Profile>;
   /** The signed-in user's most recent loan as borrower, or null. */
   getMyLoan(): Promise<LoanCase | null>;
@@ -37,21 +43,4 @@ export interface FamilyShieldApi {
 
   /** Called whenever anything this user can see may have changed. Returns an unsubscribe function. */
   subscribe(listener: () => void): () => void;
-}
-
-export interface Profile {
-  me: Person;
-  /** The people in my trusted circle. */
-  circle: Person[];
-  /** Everyone I may see a name for: my circle plus borrowers who asked me. */
-  people: Person[];
-  /** The bank account FamilyShield pays into and collects from. */
-  account: { id: string; label: string };
-}
-
-export interface CreateRequestInput {
-  reason: Reason;
-  purpose: string;
-  amount: Cents;
-  months: number;
 }

@@ -74,30 +74,68 @@ You need Node.js 20 or newer.
 
 ```bash
 npm install
-npm run dev          # BlueRiver functional mockup at http://localhost:5173
+npm run dev
 ```
 
-Then follow the story on the right side of the functional mockup page:
+This starts two things:
+
+- the **backend server** on http://localhost:8787, which reads and writes the CSV files in [`data/`](data/README.md)
+- the **BlueRiver functional mockup** on http://localhost:5173, which is the page to open
+
+Then follow the story on the right side of the page:
 
 1. As **Alex**, tap the FamilyShield card and send a request.
 2. Cousin Maya and Aunt Lisa answer automatically within a few seconds.
-3. Switch to **Mom** in the top bar. Her bank shows Alex’s request; offer privately.
+3. Switch **Viewing as** to **Grace Chen** (Mom). Her bank shows Alex’s request; offer privately.
 4. Back as Alex, accept the offers and sign. Maya signs automatically; switch to Mom to sign hers.
 5. Make payments (or use the functional mockup shortcut), ask for a pause, and claim a partner reward.
 
-Use **Embed as: Inline SDK / WebView** in the top bar to switch integration
-styles. **Reset functional mockup** starts over. Functional mockup state is saved in your browser’s localStorage.
+Use **Embed as: Inline SDK / WebView** to switch integration styles.
+**Reset functional mockup** clears all activity from the CSV files.
+
+### The data: CSV files instead of a database
+
+There is no real database. Everything lives in editable CSV files in
+[`data/`](data/README.md):
+
+| Setup (you edit) | Activity (the app writes, you can edit) |
+| --- | --- |
+| `settings.csv`: fee %, request limits, terms, points, pauses | `loans.csv`, `offers.csv`, `agreements.csv` |
+| `people.csv`: customers and opening balances | `installments.csv`, `installment_splits.csv` |
+| `circles.csv`: who is in whose trusted circle | `points_log.csv`, `pauses.csv`, `pause_answers.csv` |
+| `rewards.csv`: partner offers and point thresholds | `claimed_rewards.csv` |
+| `auto_replies.csv`: relatives the mockup plays automatically | `transactions.csv`: every bank posting |
+
+Money is written in dollars. Change a number, save, and the app shows it on the
+next refresh. Running the app changes the activity files, so expect them in
+`git status`. Press **Reset functional mockup** before committing if you
+want them empty again.
+
+**Two modes, same app:**
+
+| | `npm run dev` | GitHub Pages / `npm run dev:browser` |
+| --- | --- | --- |
+| Backend | Node server (`packages/server`) | The same backend code, running in the browser |
+| Data | `data/*.csv` on disk, read and written live | `data/*.csv` bundled at build time; activity saved in the visitor’s browser |
+| Shared between browsers | Yes | No |
+| Top-bar label | “Data: CSV files via server” | “Data: CSV files in this browser”, with CSV downloads |
 
 ### Repository layout
 
 ```
+data/          The CSV "fake database" (see data/README.md)
 packages/
-  core/        Pure TypeScript domain logic, with no dependencies and full tests
+  core/        Business rules as pure functions, with no dependencies and full tests
                money (integer cents) · fees · schedules · points · rewards · loan lifecycle
+  service/     The backend logic: the API's operations over the CSV database
+               CSV reader/writer · table mapping · privacy redaction · bank ledger · scripted relatives
+  server/      Node HTTP server exposing the service as the REST API in docs/API.md
   sdk/         The embeddable module (React, rendered in a shadow root)
-               mountFamilyShield() · bootEmbed() · HttpApi · mock backend
+               mountFamilyShield() · bootEmbed() · HttpApi · functional-mockup hosts
 apps/
   demo-bank/   "BlueRiver Bank", a fictional host app that embeds the SDK
+scripts/
+  dev.mjs      Runs the server and the bank app together
 docs/
   ARCHITECTURE.md   How the pieces fit and where money actually moves
   INTEGRATION.md    How a bank embeds FamilyShield (web, iOS, Android, React Native)
@@ -110,11 +148,16 @@ Run these from the repo root:
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Start the BlueRiver functional mockup with hot reload |
-| `npm test` | Run the core domain tests (Vitest) |
+| `npm run dev` | Backend server + BlueRiver functional mockup, both with hot reload |
+| `npm run dev:browser` | The bank app alone, with the backend running in the browser (like GitHub Pages) |
+| `npm run dev:server` | The backend server alone, on http://localhost:8787/v1 |
+| `npm test` | Run the core and service tests (Vitest) |
 | `npm run typecheck` | Type-check every package |
 | `npm run build` | Build the SDK (embed page + library) and the BlueRiver functional mockup |
 | `npm run check` | Type-check, test and build, the same as CI |
+
+The server reads `PORT` (default `8787`) and `DATA_DIR` (default `data/`), so
+you can point it at a copy of the data, e.g. `DATA_DIR=/tmp/scenario npm run dev:server`.
 
 ### How the code is organized
 
@@ -123,14 +166,20 @@ Run these from the repo root:
   pure function from one `LoanCase` to the next, or it throws a
   `FamilyShieldError` whose message is safe to show users. The UI never computes
   fees or schedules on its own.
-- **Money is integer cents.** `splitEvenly` makes installments add up exactly;
-  leftover cents go to the earliest payments.
-- **Tunable rules are in one file:** `packages/core/src/config.ts` holds the fee rate,
-  amount limits, terms, points and pause allowance.
-- **The SDK talks to a `FamilyShieldApi` interface** with two implementations:
-  `HttpApi` for production and `createMockBackend()` for functional mockups and tests. The
-  mock applies the same core rules, redacts what lenders may see, simulates the
-  bank ledger, and plays the scripted relatives in `sdk/src/api/mock/seed.ts`.
+- **Rules are data.** Fee, limits, terms, points and pauses come from
+  `data/settings.csv`, and rewards from `data/rewards.csv`. The UI gets them from
+  the backend (`GET /v1/config`); `DEFAULT_RULES` in `core/src/config.ts` is only
+  the fallback.
+- **One backend, two hosts.** `packages/service` implements every API
+  operation over the CSV tables. The Node server wraps it in HTTP; the browser
+  mode (`createBrowserMockup`) calls it directly. Both apply the same rules,
+  privacy redaction, ledger postings and scripted relatives, so the two modes
+  can’t drift apart.
+- **Money is integer cents** inside the code and dollars in the CSVs.
+  `splitEvenly` makes installments add up exactly; leftover cents go to the
+  earliest payments.
+- **The SDK talks to a `FamilyShieldApi` interface**: `HttpApi` against any
+  server that implements [docs/API.md](docs/API.md), or the in-browser backend.
 - **Styles are isolated.** The module renders in a shadow root, and partner banks
   re-skin it with theme tokens (`sdk/src/theme.ts`) instead of CSS overrides.
 
@@ -156,8 +205,11 @@ Native apps load the standalone embed page in a WebView instead. See
 
 - `packages/core/test` covers limits, offers, signing, fee-inclusive
   schedules (every lender gets exactly their principal back), points (the example
-  family in the functional mockup earns exactly 1,200), pauses, reward unlocking at full repayment, and
-  immutability.
+  family in the functional mockup earns exactly 1,200), pauses, reward unlocking
+  at full repayment, custom rules and immutability.
+- `packages/service/test` runs the whole family story against the real
+  `data/` files: CSV round-trips (quotes, commas, newlines), friendly error
+  messages for bad edits, live pickup of hand edits, bank balances, and reset.
 - CI (`.github/workflows/ci.yml`) runs type-checks, tests and builds on every
   push and pull request.
 
@@ -165,7 +217,7 @@ Native apps load the standalone embed page in a WebView instead. See
 
 The prototype covers the full customer experience. Before a pilot it would need:
 
-- [ ] The FamilyShield service: a real implementation of [docs/API.md](docs/API.md) with a database and audit log
+- [ ] Production storage: swap the CSV files for a real database with an audit log (the service’s `CsvStorage` interface is the seam)
 - [ ] Bank-side integration: token exchange, and money movement through the bank’s payment rails
 - [ ] Legal review of the agreement template and fee disclosures for each market
 - [ ] Notifications (push, email) for lenders and payment reminders

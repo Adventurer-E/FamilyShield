@@ -1,5 +1,5 @@
-import { AMOUNT_MAX, AMOUNT_MIN, AMOUNT_STEP, MAX_PAUSES, POINTS, TERM_OPTIONS, feeFor } from './config';
-import type { TermMonths } from './config';
+import { DEFAULT_RULES, feeFor } from './config';
+import type { Rules } from './config';
 import { addMonths, toIsoDate } from './dates';
 import type { IsoTimestamp } from './dates';
 import { invariant } from './errors';
@@ -30,23 +30,25 @@ export interface NewRequest {
   now: IsoTimestamp;
 }
 
-export function validateAmount(amount: Cents): void {
+const dollars = (c: Cents) => `$${(c / 100).toLocaleString('en-US')}`;
+
+export function validateAmount(amount: Cents, rules: Rules = DEFAULT_RULES): void {
   invariant(Number.isInteger(amount), 'INVALID_INPUT', 'Amount must be whole cents.');
   invariant(
-    amount >= AMOUNT_MIN && amount <= AMOUNT_MAX,
+    amount >= rules.amountMin && amount <= rules.amountMax,
     'INVALID_INPUT',
-    `Requests must be between $${AMOUNT_MIN / 100} and $${(AMOUNT_MAX / 100).toLocaleString('en-US')}.`,
+    `Requests must be between ${dollars(rules.amountMin)} and ${dollars(rules.amountMax)}.`,
   );
-  invariant(amount % AMOUNT_STEP === 0, 'INVALID_INPUT', `Requests go in steps of $${AMOUNT_STEP / 100}.`);
+  invariant((amount - rules.amountMin) % rules.amountStep === 0, 'INVALID_INPUT', `Requests go in steps of ${dollars(rules.amountStep)}.`);
 }
 
-export function isTerm(months: number): months is TermMonths {
-  return (TERM_OPTIONS as readonly number[]).includes(months);
+export function isTerm(months: number, rules: Rules = DEFAULT_RULES): boolean {
+  return rules.terms.includes(months);
 }
 
-export function createLoanCase(input: NewRequest): LoanCase {
-  validateAmount(input.amount);
-  invariant(isTerm(input.months), 'INVALID_INPUT', `Choose a term of ${TERM_OPTIONS.join(', ')} months.`);
+export function createLoanCase(input: NewRequest, rules: Rules = DEFAULT_RULES): LoanCase {
+  validateAmount(input.amount, rules);
+  invariant(isTerm(input.months, rules), 'INVALID_INPUT', `Choose a term of ${rules.terms.join(', ')} months.`);
   invariant(REASONS.includes(input.reason), 'INVALID_INPUT', 'Choose what happened.');
   const purpose = input.purpose.trim();
   invariant(purpose.length > 0, 'INVALID_INPUT', 'Tell your circle what the money is for.');
@@ -129,18 +131,18 @@ export function acceptedTotal(loan: LoanCase): Cents {
 }
 
 /** The agreements the borrower would sign right now (used for the preview too). */
-export function draftAgreements(loan: LoanCase): Agreement[] {
+export function draftAgreements(loan: LoanCase, rules: Rules = DEFAULT_RULES): Agreement[] {
   return loan.offers
     .filter((o) => o.status === 'offered' && o.accepted)
     .map((o) => {
-      const fee = feeFor(o.amount);
+      const fee = feeFor(o.amount, rules);
       return { lenderId: o.memberId, principal: o.amount, interestRate: 0, fee, total: o.amount + fee };
     });
 }
 
-export function signAsBorrower(loan: LoanCase, now: IsoTimestamp): LoanCase {
+export function signAsBorrower(loan: LoanCase, now: IsoTimestamp, rules: Rules = DEFAULT_RULES): LoanCase {
   invariant(loan.status === 'collecting', 'INVALID_STATE', 'This request has already been signed.');
-  const agreements = draftAgreements(loan);
+  const agreements = draftAgreements(loan, rules);
   invariant(agreements.length > 0, 'INVALID_STATE', 'Accept at least one offer before signing.');
   const next = clone(loan);
   next.agreements = agreements.map((a) => ({ ...a, borrowerSignedAt: now }));
@@ -150,14 +152,14 @@ export function signAsBorrower(loan: LoanCase, now: IsoTimestamp): LoanCase {
   return next;
 }
 
-export function signAsLender(loan: LoanCase, lenderId: PersonId, now: IsoTimestamp): LoanCase {
+export function signAsLender(loan: LoanCase, lenderId: PersonId, now: IsoTimestamp, rules: Rules = DEFAULT_RULES): LoanCase {
   invariant(loan.status === 'signing', 'INVALID_STATE', 'There is nothing to sign right now.');
   const next = clone(loan);
   const agreement = next.agreements.find((a) => a.lenderId === lenderId);
   invariant(agreement, 'FORBIDDEN', 'You are not a lender on this loan.');
   invariant(!agreement.lenderSignedAt, 'INVALID_STATE', 'You have already signed.');
   agreement.lenderSignedAt = now;
-  return next.agreements.every((a) => a.lenderSignedAt) ? activate(next, now) : next;
+  return next.agreements.every((a) => a.lenderSignedAt) ? activate(next, now, rules) : next;
 }
 
 /** Build the repayment schedule: every lender's principal and the fee, spread evenly. */
@@ -179,13 +181,13 @@ function award(loan: LoanCase, entry: PointsEntry): void {
   loan.pointsLog.push(entry);
 }
 
-function activate(loan: LoanCase, now: IsoTimestamp): LoanCase {
+function activate(loan: LoanCase, now: IsoTimestamp, rules: Rules): LoanCase {
   loan.status = 'active';
   loan.fundedAt = now;
   loan.schedule = buildSchedule(loan.agreements, loan.months, toIsoDate(now));
   award(loan, {
     at: now,
-    points: POINTS.HELP * loan.agreements.length,
+    points: rules.points.help * loan.agreements.length,
     reason: 'help',
     label: `${loan.agreements.length} family member${loan.agreements.length === 1 ? '' : 's'} helped`,
   });
@@ -196,7 +198,7 @@ export function nextInstallment(loan: LoanCase): Installment | undefined {
   return loan.schedule.find((i) => !i.paidAt);
 }
 
-export function recordPayment(loan: LoanCase, now: IsoTimestamp): LoanCase {
+export function recordPayment(loan: LoanCase, now: IsoTimestamp, rules: Rules = DEFAULT_RULES): LoanCase {
   invariant(loan.status === 'active', 'INVALID_STATE', 'There is no payment due.');
   const next = clone(loan);
   const installment = nextInstallment(next);
@@ -204,22 +206,22 @@ export function recordPayment(loan: LoanCase, now: IsoTimestamp): LoanCase {
   installment.paidAt = now;
   installment.onTime = toIsoDate(now) <= installment.dueDate;
   if (installment.onTime) {
-    award(next, { at: now, points: POINTS.ON_TIME, reason: 'on-time', label: `Payment ${installment.index + 1} on time` });
+    award(next, { at: now, points: rules.points.onTime, reason: 'on-time', label: `Payment ${installment.index + 1} on time` });
   }
   // Paying while a pause is pending withdraws the pause request.
   if (next.pause?.status === 'pending') next.pause = null;
   if (!nextInstallment(next)) {
     next.status = 'repaid';
     next.repaidAt = now;
-    award(next, { at: now, points: POINTS.COMPLETE, reason: 'complete', label: 'Fully repaid' });
+    award(next, { at: now, points: rules.points.complete, reason: 'complete', label: 'Fully repaid' });
   }
   return next;
 }
 
-export function requestPause(loan: LoanCase, now: IsoTimestamp): LoanCase {
+export function requestPause(loan: LoanCase, now: IsoTimestamp, rules: Rules = DEFAULT_RULES): LoanCase {
   invariant(loan.status === 'active', 'INVALID_STATE', 'You can only pause an active loan.');
   invariant(loan.pause?.status !== 'pending', 'INVALID_STATE', 'A pause request is already waiting for an answer.');
-  invariant(loan.pausesUsed < MAX_PAUSES, 'LIMIT_REACHED', 'You’ve used the pause available on this loan.');
+  invariant(loan.pausesUsed < rules.maxPauses, 'LIMIT_REACHED', 'You’ve used the pause available on this loan.');
   const next = clone(loan);
   next.pause = {
     status: 'pending',

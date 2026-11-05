@@ -1,11 +1,11 @@
-import { REWARDS, addMonths, formatDate, rewardStatus } from '@familyshield/core';
+import { addMonths, formatDate, rewardStatus } from '@familyshield/core';
 import type { LoanCase } from '@familyshield/core';
 import { useFs } from '../context';
 import { Button, Notice, Screen, Terms } from '../kit';
 
 export function Reward({ loan, rewardId }: { loan: LoanCase; rewardId: string }) {
-  const { api, run, emit, nameOf } = useFs();
-  const reward = REWARDS.find((r) => r.id === rewardId);
+  const { api, run, emit, nameOf, data } = useFs();
+  const reward = data.config.rewards.find((r) => r.id === rewardId);
   if (!reward) return null;
   const status = rewardStatus(loan, reward);
   const code = loan.claimedRewards[reward.id];

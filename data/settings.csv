@@ -1,0 +1,10 @@
+key,value,description
+fee_rate_percent,5,One-time service fee the borrower pays; added to what they repay
+min_request,500,Smallest request in dollars
+max_request,5000,Largest request in dollars
+request_step,250,Requests go up and down in steps of this many dollars
+terms_months,6|10|12,Repayment terms a borrower can pick (separate with |)
+max_pauses,1,How many one-month pauses a borrower can ask for per loan
+points_per_helper,100,Family points for each relative who funds the loan
+points_per_on_time_payment,80,Family points for each payment made on or before its due date
+points_on_full_repayment,200,Bonus family points when the loan is fully repaid

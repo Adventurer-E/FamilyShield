@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { ReactNode } from 'react';
 import { FamilyShieldError } from '@familyshield/core';
 import type { LoanCase, PersonId } from '@familyshield/core';
-import type { FamilyShieldApi, Profile } from '../api/types';
+import type { AppConfig, FamilyShieldApi, Profile } from '../api/types';
 import type { HostEvent } from '../bridge';
 
 export type Route =
@@ -16,6 +16,8 @@ export type Route =
   | { name: 'lender'; loanId: string };
 
 export interface FsData {
+  /** Rules and rewards as the backend has them (data/settings.csv, data/rewards.csv). */
+  config: AppConfig;
   profile: Profile;
   myLoan: LoanCase | null;
   incoming: LoanCase[];
@@ -50,8 +52,8 @@ export function useFs(): FsContext {
 }
 
 async function fetchAll(api: FamilyShieldApi): Promise<FsData> {
-  const [profile, myLoan, incoming] = await Promise.all([api.getProfile(), api.getMyLoan(), api.getIncoming()]);
-  return { profile, myLoan, incoming };
+  const [config, profile, myLoan, incoming] = await Promise.all([api.getConfig(), api.getProfile(), api.getMyLoan(), api.getIncoming()]);
+  return { config, profile, myLoan, incoming };
 }
 
 export function FamilyShieldProvider(props: {
