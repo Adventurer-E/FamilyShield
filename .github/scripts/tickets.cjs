@@ -30,7 +30,7 @@ const EXTRA_LABELS = [
 /** The two "in principle" rules, worded once so every message says the same thing. */
 const RULES = {
   selfReview:
-    'In principle, a ticket’s reviewer is not its author. Only in an emergency or other extenuating circumstances, or as a repository administrator, may the author review their own work, using `/self-approve <reason>` on the pull request.',
+    'In principle, a ticket’s reviewer is not its assignee. Only in an emergency or other extenuating circumstances, or as a repository administrator, may the assignee also review the work, using `/self-approve <reason>` on the pull request.',
   directPush:
     'In principle, every change reaches `main` through a ticket branch and a reviewed pull request. Only in an emergency or other extenuating circumstances, or as a repository administrator, may someone push to `main` directly.',
 };
@@ -107,9 +107,14 @@ function parseMeta(body) {
       hasBlock: true,
     };
   }
-  const form = /###\s*Reviewer[^\n]*\n+([^\n#]*)/i.exec(text);
-  const answer = form ? form[1].trim() : '';
-  return { reviewers: answer && !/^_?no response_?$/i.test(answer) ? parseUsers(answer, '') : [], branch: null, hasBlock: false };
+  return { reviewers: parseFormField(text, 'Reviewer'), branch: null, hasBlock: false };
+}
+
+/** The users named in an issue-form answer ("### Assignee\n\n@ann"), or [] for "_No response_". */
+function parseFormField(body, label) {
+  const m = new RegExp(`###\\s*${label}[^\\n]*\\n+([^\\n#]*)`, 'i').exec(String(body || ''));
+  const answer = m ? m[1].trim() : '';
+  return answer && !/^_?no response_?$/i.test(answer) ? parseUsers(answer, '') : [];
 }
 
 function renderMeta(meta, repoUrl) {
@@ -159,14 +164,17 @@ const HELP = [
   '| Command | Does |',
   '| --- | --- |',
   '| `/start` | Move to **In progress**, assign you if nobody is assigned, and create the branch |',
-  '| `/assign me` · `/assign @name` | Assign (you can also use **Assignees** on the right) |',
-  '| `/unassign @name` | Remove an assignee |',
+  '| `/assign me` · `/assign @name` | Add an assignee (you can also use **Assignees** on the right) |',
+  '| `/reassign @name` | Replace whoever is assigned with someone else |',
+  '| `/unassign me` · `/unassign @name` | Remove an assignee |',
   '| `/reviewer me` · `/reviewer @name` | Add a reviewer (`/review` is short for `/reviewer me`) |',
   '| `/reviewer remove @name` · `/reviewer clear` | Remove one or all reviewers |',
   '| `/status icebox` · `in progress` · `under review` · `reviewed` | Set the status by hand (you can also drag the card on the board) |',
   '| `/help` | Show this list |',
   '',
-  'On a **pull request**, `/self-approve <reason>` records a rule exception when the author must review their own work (emergencies, or administrators).',
+  'Anyone can create a ticket, assign it, change the assignee or assign themselves. Who created a ticket doesn’t matter; the **assignee** does the work and the **reviewer** reviews and merges it.',
+  '',
+  'On a **pull request**, `/self-approve <reason>` records a rule exception when the assignee must also review the work (emergencies, or administrators).',
   '',
   'Status moves on its own, too: opening a pull request → **Under review** (reviewers are notified), approval → **Reviewed**, merge → **Done**.',
 ].join('\n');
@@ -317,17 +325,21 @@ class TicketBot {
       await this.comment(issue.number, `⚠️ This ticket is **Under review** but has no reviewer. Someone please comment \`/reviewer me\`, or the author can comment \`/reviewer @name\`.`);
       return;
     }
+    const assignees = (issue.assignees || []).map((a) => a.login.toLowerCase());
+    const both = meta.reviewers.filter((r) => assignees.includes(r.toLowerCase()));
     for (const pr of pulls) {
-      const reviewers = meta.reviewers.filter((r) => r.toLowerCase() !== pr.user.login.toLowerCase());
+      // GitHub can't request a review from the person who opened the pull request.
+      const opener = pr.user.login.toLowerCase();
+      const reviewers = meta.reviewers.filter((r) => r.toLowerCase() !== opener);
       if (reviewers.length) {
         await this.github.rest.pulls.requestReviewers({ ...this.repo, pull_number: pr.number, reviewers }).catch((e) => this.core.warning(`requestReviewers: ${e.message}`));
       }
-      if (reviewers.length < meta.reviewers.length) {
-        await this.comment(
-          pr.number,
-          `⚠️ @${pr.user.login} wrote this pull request and is also a reviewer of #${issue.number}. ${RULES.selfReview} Otherwise, please add another reviewer on the ticket (\`/reviewer @name\`).`,
-        );
+      const notes = [];
+      if (both.length) notes.push(`⚠️ ${both.map((r) => `@${r}`).join(' ')} is both assignee and reviewer of #${issue.number}. ${RULES.selfReview}`);
+      if (reviewers.length < meta.reviewers.length && !both.some((r) => r.toLowerCase() === opener)) {
+        notes.push(`ℹ️ @${pr.user.login} opened this pull request and is a reviewer of #${issue.number}. GitHub doesn’t let the person who opened a pull request approve it, so either add another reviewer on the ticket (\`/reviewer @name\`) or use \`/self-approve <reason>\` here.`);
       }
+      if (notes.length) await this.comment(pr.number, notes.join('\n\n'));
     }
     if (!quiet) {
       await this.comment(issue.number, `👀 **Under review.** ${meta.reviewers.map((r) => `@${r}`).join(' ')}: your review is requested on ${pulls.map((p) => `#${p.number}`).join(', ')}. When you approve, merging is your job.`);
@@ -340,6 +352,12 @@ class TicketBot {
     await this.ensureLabels();
     const meta = parseMeta(issue.body);
     await this.saveMeta(issue, meta);
+    // Optional "Assignee" answer on the ticket form (anyone can fill it in).
+    const wanted = parseFormField(issue.body, 'Assignee');
+    if (wanted.length) {
+      await this.github.rest.issues.addAssignees({ ...this.repo, issue_number: issue.number, assignees: wanted });
+      issue.assignees = [...(issue.assignees || []), ...wanted.map((login) => ({ login }))];
+    }
     if (this.board) await this.board.add(issue.node_id).catch((e) => this.core.warning(`board: ${e.message}`));
     if (!statusOfLabels(issue.labels)) await this.setStatus(issue, 'icebox', { quiet: true });
     else if (this.board) await this.board.setStatus(issue.node_id, statusOfLabels(issue.labels).board).catch(() => {});
@@ -361,12 +379,19 @@ class TicketBot {
     }
   }
 
-  /** May this person record a self-approval exception on this pull request? */
+  /**
+   * May this person record a self-approval exception on this pull request?
+   * Yes for administrators, and for a ticket reviewer who can't approve normally:
+   * they are also the ticket's assignee, or they opened the pull request
+   * (GitHub never lets the person who opened a pull request approve it).
+   */
   async canSelfApprove(login, pr, issues) {
     if (await this.isAdmin(login)) return { ok: true, as: 'administrator' };
-    const isAuthor = pr.user.login.toLowerCase() === login.toLowerCase();
-    const isReviewer = issues.length > 0 && issues.every((i) => parseMeta(i.body).reviewers.some((r) => r.toLowerCase() === login.toLowerCase()));
-    if (isAuthor && isReviewer) return { ok: true, as: 'author and reviewer' };
+    const me = login.toLowerCase();
+    const isReviewer = issues.length > 0 && issues.every((i) => parseMeta(i.body).reviewers.some((r) => r.toLowerCase() === me));
+    if (!isReviewer) return { ok: false };
+    if (issues.some((i) => (i.assignees || []).some((a) => a.login.toLowerCase() === me))) return { ok: true, as: 'assignee and reviewer' };
+    if (pr.user.login.toLowerCase() === me) return { ok: true, as: 'reviewer who opened the pull request' };
     return { ok: false };
   }
 
@@ -381,7 +406,10 @@ class TicketBot {
     if (reason.length < 10) return this.comment(prNumber, `⚠️ Please give the reason, e.g. \`/self-approve Production fix while the reviewer is away\`.\n\n${RULES.selfReview}`);
     const who = await this.canSelfApprove(actor, pr, issues);
     if (!who.ok) {
-      return this.comment(prNumber, `⚠️ @${actor}, \`/self-approve\` is only for the ticket’s reviewer when they are also the author, or for a repository administrator. ${RULES.selfReview}`);
+      return this.comment(
+        prNumber,
+        `⚠️ @${actor}, \`/self-approve\` is only for the ticket’s reviewer when they are also its assignee (or opened this pull request), or for a repository administrator. ${RULES.selfReview}`,
+      );
     }
     await this.github.rest.issues.addLabels({ ...this.repo, issue_number: prNumber, labels: ['rule exception'] });
     for (const issue of issues) await this.setStatus(issue, 'reviewed', { quiet: true });
@@ -423,15 +451,30 @@ class TicketBot {
         replies.push(HELP);
       } else if (name === 'start') {
         await this.setStatus(issue, 'in-progress', { actor });
-      } else if (name === 'assign' || name === 'unassign') {
+      } else if (name === 'assign' || name === 'unassign' || name === 'reassign') {
         const users = parseUsers(args || 'me', actor);
         if (!users.length) {
           replies.push(`⚠️ \`/${name}\` needs a name, e.g. \`/${name} me\` or \`/${name} @ann\`.`);
           continue;
         }
-        if (name === 'assign') await this.github.rest.issues.addAssignees({ ...this.repo, issue_number: issue.number, assignees: users });
-        else await this.github.rest.issues.removeAssignees({ ...this.repo, issue_number: issue.number, assignees: users });
-        replies.push(`✅ ${name === 'assign' ? 'Assigned' : 'Unassigned'} ${users.map((u) => `@${u}`).join(' ')}.`);
+        const current = (issue.assignees || []).map((a) => a.login);
+        if (name === 'reassign') {
+          const drop = current.filter((c) => !users.some((u) => u.toLowerCase() === c.toLowerCase()));
+          if (drop.length) await this.github.rest.issues.removeAssignees({ ...this.repo, issue_number: issue.number, assignees: drop });
+        }
+        if (name === 'unassign') await this.github.rest.issues.removeAssignees({ ...this.repo, issue_number: issue.number, assignees: users });
+        else await this.github.rest.issues.addAssignees({ ...this.repo, issue_number: issue.number, assignees: users });
+        issue.assignees =
+          name === 'unassign'
+            ? (issue.assignees || []).filter((a) => !users.some((u) => u.toLowerCase() === a.login.toLowerCase()))
+            : name === 'reassign'
+              ? users.map((login) => ({ login }))
+              : [...(issue.assignees || []), ...users.filter((u) => !current.some((c) => c.toLowerCase() === u.toLowerCase())).map((login) => ({ login }))];
+        replies.push(`✅ ${name === 'unassign' ? 'Unassigned' : 'Assigned'} ${users.map((u) => `@${u}`).join(' ')}.`);
+        if (name !== 'unassign') {
+          const both = users.filter((u) => meta.reviewers.some((r) => r.toLowerCase() === u.toLowerCase()));
+          if (both.length) replies.push(`⚠️ ${both.map((r) => `@${r}`).join(' ')} is both assignee and reviewer. ${RULES.selfReview}`);
+        }
       } else if (name === 'review' || name === 'reviewer' || name === 'reviewers') {
         let reviewers = [...meta.reviewers];
         const words = (name === 'review' ? 'me' : args).trim();
@@ -448,7 +491,7 @@ class TicketBot {
         replies.push(reviewers.length ? `✅ Reviewer(s): ${reviewers.map((r) => `@${r}`).join(' ')}` : '✅ No reviewers now.');
         const assignees = (issue.assignees || []).map((a) => a.login.toLowerCase());
         const both = reviewers.filter((r) => assignees.includes(r.toLowerCase()));
-        if (both.length) replies.push(`⚠️ ${both.map((r) => `@${r}`).join(' ')} is both author and reviewer. ${RULES.selfReview}`);
+        if (both.length) replies.push(`⚠️ ${both.map((r) => `@${r}`).join(' ')} is both assignee and reviewer. ${RULES.selfReview}`);
         // Already under review? Ask the new reviewers right away.
         if (statusOfLabels(issue.labels)?.key === 'under-review') await this.onUnderReview(issue, { quiet: true });
       } else if (name === 'status') {
@@ -533,8 +576,8 @@ class TicketBot {
         await this.comment(pr.number, `✅ Approved by @${who}. @${who}, you're the reviewer, so please **merge** when the checks are green.`);
       } else if (state === 'CHANGES_REQUESTED') {
         await this.setStatus(issue, 'in-progress', { quiet: true });
-        const authors = (issue.assignees || []).map((a) => `@${a.login}`).join(' ') || `@${pr.user.login}`;
-        await this.comment(issue.number, `✏️ @${who} requested changes on #${pr.number}. ${authors}: back to **In progress**. Push your fixes and the reviewer will be asked again.`);
+        const assignees = (issue.assignees || []).map((a) => `@${a.login}`).join(' ') || `@${pr.user.login}`;
+        await this.comment(issue.number, `✏️ @${who} requested changes on #${pr.number}. ${assignees}: back to **In progress**. Push your fixes and the reviewer will be asked again.`);
       }
     }
   }
@@ -802,6 +845,7 @@ module.exports = {
   parseCommands,
   parseUsers,
   parseMeta,
+  parseFormField,
   withMeta,
   linkedIssueNumbers,
   latestReviews,

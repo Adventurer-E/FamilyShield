@@ -316,7 +316,7 @@ describe('commands', () => {
     const { gh, say } = await setup();
     await say('/start', 'bob');
     await say('/reviewer me', 'bob');
-    assert.ok(gh.commentsOn(1).some((c) => /both author and reviewer/.test(c) && /In principle/.test(c) && /administrator/.test(c)));
+    assert.ok(gh.commentsOn(1).some((c) => /both assignee and reviewer/.test(c) && /In principle, a ticket’s reviewer is not its assignee/.test(c) && /administrator/.test(c)));
   });
 
   test('status by hand, and helpful errors', async () => {
@@ -400,9 +400,9 @@ describe('rule exceptions', () => {
   }
   const prIssue = (gh, pr) => gh.state.issues[pr.number];
 
-  test('author-reviewers are told the rule, and the gate waits', async () => {
+  test('assignee-reviewers are told the rule, and the gate waits', async () => {
     const { gh, bot, pr } = await selfReviewed();
-    assert.ok(gh.commentsOn(pr.number).some((c) => /In principle, a ticket’s reviewer is not its author/.test(c) && /\/self-approve/.test(c)));
+    assert.ok(gh.commentsOn(pr.number).some((c) => /both assignee and reviewer/.test(c) && /\/self-approve/.test(c)));
     assert.equal((await bot.reviewGate(gh.state.pulls[pr.number])).ok, false);
   });
 
@@ -423,7 +423,7 @@ describe('rule exceptions', () => {
     assert.ok(gh.commentsOn(pr.number).some((c) => /give the reason/.test(c)));
     gh.say(pr.number, 'carl', '/self-approve I think it is fine honestly');
     await bot.onIssueComment(prIssue(gh, pr), '/self-approve I think it is fine honestly', 'carl');
-    assert.ok(gh.commentsOn(pr.number).some((c) => /only for the ticket’s reviewer when they are also the author, or for a repository administrator/.test(c)));
+    assert.ok(gh.commentsOn(pr.number).some((c) => /only for the ticket’s reviewer when they are also its assignee \(or opened this pull request\), or for a repository administrator/.test(c)));
     assert.equal((await bot.reviewGate(gh.state.pulls[pr.number])).ok, false, "carl's comment doesn't count");
   });
 
@@ -453,5 +453,53 @@ describe('rule exceptions', () => {
 
     await bot.onPushToMain({ pusher: { name: 'github-actions[bot]' }, commits: [{ id: 'x', message: 'bot' }] });
     assert.equal(Object.keys(gh.state.issues).length, 1, 'bot pushes are ignored');
+  });
+});
+
+describe('assignees (who created the ticket doesn’t matter)', () => {
+  async function open(body = '') {
+    const gh = fakeGitHub();
+    const bot = new t.TicketBot({ github: gh.github, context, core: silentCore() });
+    gh.openIssue({ title: 'Task', body, by: 'someone-else' });
+    await bot.onIssueOpened(await bot.getIssue(1));
+    return { gh, bot, say: async (text, who) => bot.onIssueComment(await bot.getIssue(1), text, who) };
+  }
+  const assignees = (gh) => gh.state.issues[1].assignees.map((a) => a.login);
+
+  test('a ticket can be created assigned (form field) or unassigned', async () => {
+    assert.deepEqual(assignees((await open('### Assignee\n\n@bo\n\n### Reviewer\n\n@ann')).gh), ['bo']);
+    assert.deepEqual(assignees((await open('### Assignee\n\n_No response_\n\n### Reviewer\n\n@ann')).gh), []);
+  });
+
+  test('anyone can assign, self-assign, reassign and unassign', async () => {
+    const { gh, say } = await open();
+    await say('/assign me', 'carl');
+    await say('/assign @dee', 'eric');
+    assert.deepEqual(assignees(gh), ['carl', 'dee']);
+    await say('/reassign @bo', 'eric');
+    assert.deepEqual(assignees(gh), ['bo']);
+    await say('/unassign @bo', 'bo');
+    assert.deepEqual(assignees(gh), []);
+  });
+
+  test('assigning the reviewer reminds everyone of the rule', async () => {
+    const { gh, say } = await open('### Reviewer\n\n@ann');
+    await say('/assign @ann', 'eric');
+    assert.ok(gh.commentsOn(1).some((c) => /@ann is both assignee and reviewer/.test(c)));
+  });
+
+  test('a reviewer who opened the pull request for someone else can record an exception', async () => {
+    const gh = fakeGitHub();
+    const bot = new t.TicketBot({ github: gh.github, context, core: silentCore() });
+    gh.openIssue({ title: 'Help', body: '### Assignee\n\n@bo\n\n### Reviewer\n\n@ann' });
+    await bot.onIssueOpened(await bot.getIssue(1));
+    const pr = gh.openPull({ head: 'ticket/1-help', by: 'ann' }); // Ann opened it on Bo's behalf
+    await bot.onPullRequest(pr, 'opened');
+    assert.deepEqual(gh.state.requested, [], 'GitHub cannot request a review from the opener');
+    assert.ok(gh.commentsOn(pr.number).some((c) => /opened this pull request and is a reviewer/.test(c)));
+    assert.ok(!gh.commentsOn(pr.number).some((c) => /both assignee and reviewer/.test(c)), 'assignee ≠ reviewer, so the rule is kept');
+    gh.say(pr.number, 'ann', '/self-approve I paired with Bo and reviewed it live');
+    await bot.onIssueComment(gh.state.issues[pr.number], '/self-approve I paired with Bo and reviewed it live', 'ann');
+    assert.match((await bot.reviewGate(gh.state.pulls[pr.number])).message, /@ann: I paired with Bo/);
   });
 });

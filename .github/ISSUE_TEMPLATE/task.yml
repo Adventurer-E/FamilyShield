@@ -42,8 +42,14 @@ body:
         - Back-end (rules, service, server)
         - Docs / workflow / CI
   - type: input
+    id: assignee
+    attributes:
+      label: Assignee
+      description: Optional. Who will do the work? A GitHub @name, or leave empty. Anyone can assign or change it later (`/assign me`, `/reassign @name`).
+      placeholder: '@name'
+  - type: input
     id: reviewer
     attributes:
       label: Reviewer
-      description: Who should review and merge it? A GitHub @name. Leave empty to decide later with `/reviewer @name` or `/reviewer me`.
+      description: Who should review and merge it? A GitHub @name, ideally not the assignee. Leave empty to decide later with `/reviewer @name` or `/reviewer me`.
       placeholder: '@name'
