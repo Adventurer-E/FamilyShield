@@ -18,16 +18,19 @@ function fakeGitHub() {
     admins: [], // logins with admin permission
     prCommits: {}, // commit sha → [pull requests]
     reruns: [],
+    clock: 0, // fake time: every review, comment and commit gets the next minute
+    headTimes: {}, // head sha → commit time
     requested: [], // { pull, reviewers }
     next: 1,
   };
+  const tick = () => new Date(Date.UTC(2026, 10, 5, 8, state.clock++)).toISOString();
   const notFound = () => Object.assign(new Error('Not Found'), { status: 404 });
   const issue = (n) => state.issues[n] || (() => { throw notFound(); })();
   const ok = (data) => Promise.resolve({ data });
   const rest = {
     issues: {
       get: async ({ issue_number }) => ok(structuredClone(issue(issue_number))),
-      createComment: async ({ issue_number, body }) => { state.comments.push({ number: issue_number, body, user: { login: 'github-actions[bot]' } }); return ok({}); },
+      createComment: async ({ issue_number, body }) => { state.comments.push({ number: issue_number, body, user: { login: 'github-actions[bot]' }, created_at: tick() }); return ok({}); },
       listComments: async ({ issue_number }) => ok(state.comments.filter((c) => c.number === issue_number)),
       create: async ({ title, body, labels, assignees }) => {
         const n = state.next++;
@@ -68,6 +71,7 @@ function fakeGitHub() {
       get: async () => ok({ default_branch: 'main', node_id: 'R_1' }),
       getCollaboratorPermissionLevel: async ({ username }) => ok({ permission: state.admins.includes(username) ? 'admin' : 'write' }),
       listPullRequestsAssociatedWithCommit: async ({ commit_sha }) => ok(state.prCommits[commit_sha] || []),
+      getCommit: async ({ ref }) => ok({ commit: { committer: { date: state.headTimes[ref] || '2026-11-05T07:00:00.000Z' } } }),
     },
     actions: {
       listWorkflowRuns: async () => ok({ workflow_runs: [{ id: 77 }] }),
@@ -98,16 +102,22 @@ function fakeGitHub() {
     openPull({ head, body = '', by, draft = false }) {
       const n = state.next++;
       state.pulls[n] = { number: n, head: { ref: head, sha: `sha-${n}` }, body, user: { login: by }, draft, state: 'open', merged: false };
+      state.headTimes[`sha-${n}`] = tick();
       state.issues[n] = { number: n, node_id: `PR_${n}`, title: 'pr', body, labels: [], assignees: [], state: 'open', pull_request: {} };
       return state.pulls[n];
     },
     review(pull, login, st) {
-      (state.reviews[pull.number] ||= []).push({ user: { login }, state: st });
+      (state.reviews[pull.number] ||= []).push({ user: { login }, state: st, submitted_at: tick(), commit_id: state.pulls[pull.number].head.sha });
+    },
+    push(pull) {
+      const sha = `${state.pulls[pull.number].head.sha}+`;
+      state.pulls[pull.number].head.sha = sha;
+      state.headTimes[sha] = tick();
     },
     status: (n) => t.statusOfLabels(state.issues[n].labels)?.key,
     commentsOn: (n) => state.comments.filter((c) => c.number === n).map((c) => c.body),
     say(n, login, body) {
-      state.comments.push({ number: n, body, user: { login } });
+      state.comments.push({ number: n, body, user: { login }, created_at: tick() });
     },
   };
   return { github, state, ...helpers };
@@ -424,7 +434,7 @@ describe('rule exceptions', () => {
     assert.ok(gh.commentsOn(pr.number).some((c) => /give the reason/.test(c)));
     gh.say(pr.number, 'carl', '/self-approve I think it is fine honestly');
     await bot.onIssueComment(prIssue(gh, pr), '/self-approve I think it is fine honestly', 'carl');
-    assert.ok(gh.commentsOn(pr.number).some((c) => /only for the ticket’s reviewer when they are also its assignee \(or opened this pull request\), or for a repository administrator/.test(c)));
+    assert.ok(gh.commentsOn(pr.number).some((c) => /only for a ticket reviewer who is also its assignee, or for a repository administrator/.test(c)));
     assert.equal((await bot.reviewGate(gh.state.pulls[pr.number])).ok, false, "carl's comment doesn't count");
   });
 
@@ -490,18 +500,48 @@ describe('assignees (who created the ticket doesn’t matter)', () => {
     assert.ok(gh.commentsOn(1).some((c) => /@ann is both assignee and reviewer/.test(c)));
   });
 
-  test('a reviewer who opened the pull request for someone else can record an exception', async () => {
+  test('who opened the pull request doesn’t matter: the reviewer approves with /approve', async () => {
     const gh = fakeGitHub();
     const bot = new t.TicketBot({ github: gh.github, context, core: silentCore() });
-    gh.openIssue({ title: 'Help', body: '### Assignee\n\n@bo\n\n### Reviewer\n\n@ann' });
+    gh.openIssue({ title: 'Help', body: '### Reviewer\n\n@ann', by: 'ann' }); // Ann wrote the ticket, nobody is assigned
     await bot.onIssueOpened(await bot.getIssue(1));
-    const pr = gh.openPull({ head: 'ticket/1-help', by: 'ann' }); // Ann opened it on Bo's behalf
+    const pr = gh.openPull({ head: 'ticket/1-help', by: 'ann' }); // and Ann opened the pull request
     await bot.onPullRequest(pr, 'opened');
     assert.deepEqual(gh.state.requested, [], 'GitHub cannot request a review from the opener');
-    assert.ok(gh.commentsOn(pr.number).some((c) => /opened this pull request and is a reviewer/.test(c)));
-    assert.ok(!gh.commentsOn(pr.number).some((c) => /both assignee and reviewer/.test(c)), 'assignee ≠ reviewer, so the rule is kept');
-    gh.say(pr.number, 'ann', '/self-approve I paired with Bo and reviewed it live');
-    await bot.onIssueComment(gh.state.issues[pr.number], '/self-approve I paired with Bo and reviewed it live', 'ann');
-    assert.match((await bot.reviewGate(gh.state.pulls[pr.number])).message, /@ann: I paired with Bo/);
+    assert.ok(gh.commentsOn(pr.number).some((c) => /approve by commenting `\/approve`/.test(c)));
+    assert.ok(!gh.commentsOn(pr.number).some((c) => /both assignee and reviewer/.test(c)), 'no assignee, so no rule issue');
+    assert.match((await bot.reviewGate(gh.state.pulls[pr.number])).message, /comment "\/approve"/);
+
+    gh.say(pr.number, 'ann', '/approve');
+    await bot.onIssueComment(gh.state.issues[pr.number], '/approve', 'ann');
+    assert.equal(gh.status(1), 'reviewed');
+    assert.deepEqual(gh.state.reruns, [77]);
+    assert.ok(!gh.state.issues[pr.number].labels.some((l) => l.name === 'rule exception'), 'not an exception');
+    assert.deepEqual(await bot.reviewGate(gh.state.pulls[pr.number]), { ok: true, message: 'Approved by the ticket reviewer.' });
+
+    gh.push(pr); // new commit after the approval
+    assert.equal((await bot.reviewGate(gh.state.pulls[pr.number])).ok, false, 'needs a fresh /approve');
+    gh.say(pr.number, 'ann', '/approve');
+    assert.equal((await bot.reviewGate(gh.state.pulls[pr.number])).ok, true);
+  });
+
+  test('/approve is only for a reviewer who isn’t the assignee', async () => {
+    const gh = fakeGitHub();
+    const bot = new t.TicketBot({ github: gh.github, context, core: silentCore() });
+    gh.openIssue({ title: 'X', body: '### Assignee\n\n@bo\n\n### Reviewer\n\n@bo' });
+    await bot.onIssueOpened(await bot.getIssue(1));
+    const pr = gh.openPull({ head: 'ticket/1-x', by: 'carl' });
+    await bot.onPullRequest(pr, 'opened');
+    gh.say(pr.number, 'bo', '/approve');
+    await bot.onIssueComment(gh.state.issues[pr.number], '/approve', 'bo');
+    assert.ok(gh.commentsOn(pr.number).some((c) => /both the assignee and the reviewer/.test(c)));
+    gh.review(pr, 'bo', 'APPROVED'); // the Approve button doesn't count either
+    await bot.onReview(gh.state.pulls[pr.number], { user: { login: 'bo' }, state: 'approved' });
+    assert.notEqual(gh.status(1), 'reviewed');
+    assert.match((await bot.reviewGate(gh.state.pulls[pr.number])).message, /both assignee and reviewer of #1/);
+    gh.say(pr.number, 'dee', '/approve');
+    await bot.onIssueComment(gh.state.issues[pr.number], '/approve', 'dee');
+    assert.ok(gh.commentsOn(pr.number).some((c) => /only the ticket’s reviewer can `\/approve`/.test(c)));
+    assert.equal((await bot.reviewGate(gh.state.pulls[pr.number])).ok, false, "dee isn't the reviewer");
   });
 });
