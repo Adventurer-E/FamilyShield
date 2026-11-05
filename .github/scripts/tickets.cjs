@@ -135,6 +135,16 @@ function withMeta(body, meta, repoUrl) {
   return `${text.trimEnd()}\n\n${block}`;
 }
 
+const lc = (s) => String(s || '').toLowerCase();
+/** Is this person a reviewer on every ticket the pull request belongs to? */
+function reviewerOfAll(login, issues) {
+  return issues.length > 0 && issues.every((i) => parseMeta(i.body).reviewers.some((r) => lc(r) === lc(login)));
+}
+/** Is this person assigned to any of the tickets? */
+function assigneeOfAny(login, issues) {
+  return issues.some((i) => (i.assignees || []).some((a) => lc(a.login) === lc(login)));
+}
+
 /** Ticket numbers a PR belongs to: its branch name (ticket/12-…) and "Closes #12" in its description. */
 function linkedIssueNumbers(pr) {
   const nums = new Set();
@@ -177,7 +187,7 @@ const HELP = [
   '',
   'Anyone can create a ticket, assign it, change the assignee or assign themselves. Who created a ticket doesn’t matter; the **assignee** does the work and the **reviewer** reviews and merges it.',
   '',
-  'On a **pull request**, `/self-approve <reason>` records a rule exception when the assignee must also review the work (emergencies, or administrators).',
+  'On a **pull request**: the reviewer can comment `/approve` (same as the Approve button, which GitHub hides from whoever opened the pull request). `/self-approve <reason>` records a rule exception when the assignee must also review the work (emergencies, or administrators).',
   '',
   'Status moves on its own, too: opening a pull request → **Under review** (reviewers are notified), approval → **Reviewed**, merge → **Done**.',
 ].join('\n');
@@ -340,7 +350,7 @@ class TicketBot {
       const notes = [];
       if (both.length) notes.push(`⚠️ ${both.map((r) => `@${r}`).join(' ')} is both assignee and reviewer of #${issue.number}. ${RULES.selfReview}`);
       if (reviewers.length < meta.reviewers.length && !both.some((r) => r.toLowerCase() === opener)) {
-        notes.push(`ℹ️ @${pr.user.login} opened this pull request and is a reviewer of #${issue.number}. GitHub doesn’t let the person who opened a pull request approve it, so either add another reviewer on the ticket (\`/reviewer @name\`) or use \`/self-approve <reason>\` here.`);
+        notes.push(`ℹ️ @${pr.user.login}, you opened this pull request and you’re the reviewer of #${issue.number}. GitHub hides the Approve button from whoever opened a pull request, so approve by commenting \`/approve\` here instead. It counts the same.`);
       }
       if (notes.length) await this.comment(pr.number, notes.join('\n\n'));
     }
@@ -384,23 +394,20 @@ class TicketBot {
 
   /**
    * May this person record a self-approval exception on this pull request?
-   * Yes for administrators, and for a ticket reviewer who can't approve normally:
-   * they are also the ticket's assignee, or they opened the pull request
-   * (GitHub never lets the person who opened a pull request approve it).
+   * Only administrators, and a ticket reviewer who is also its assignee (the
+   * one situation the "assignee ≠ reviewer" rule is about).
    */
   async canSelfApprove(login, pr, issues) {
     if (await this.isAdmin(login)) return { ok: true, as: 'administrator' };
-    const me = login.toLowerCase();
-    const isReviewer = issues.length > 0 && issues.every((i) => parseMeta(i.body).reviewers.some((r) => r.toLowerCase() === me));
-    if (!isReviewer) return { ok: false };
-    if (issues.some((i) => (i.assignees || []).some((a) => a.login.toLowerCase() === me))) return { ok: true, as: 'assignee and reviewer' };
-    if (pr.user.login.toLowerCase() === me) return { ok: true, as: 'reviewer who opened the pull request' };
+    if (reviewerOfAll(login, issues) && assigneeOfAny(login, issues)) return { ok: true, as: 'assignee and reviewer' };
     return { ok: false };
   }
 
-  /** Comments on a pull request: only /self-approve is understood there. */
+  /** Comments on a pull request: /approve and /self-approve are understood there. */
   async onPullRequestComment(prNumber, commentBody, actor) {
-    const commands = parseCommands(commentBody).filter((c) => c.name === 'self-approve' || c.name === 'exception');
+    const all = parseCommands(commentBody);
+    if (all.some((c) => c.name === 'approve')) return this.onApproveComment(prNumber, actor);
+    const commands = all.filter((c) => c.name === 'self-approve' || c.name === 'exception');
     if (!commands.length) return;
     const reason = commands[0].args.trim();
     const pr = (await this.github.rest.pulls.get({ ...this.repo, pull_number: prNumber })).data;
@@ -411,12 +418,33 @@ class TicketBot {
     if (!who.ok) {
       return this.comment(
         prNumber,
-        `⚠️ @${actor}, \`/self-approve\` is only for the ticket’s reviewer when they are also its assignee (or opened this pull request), or for a repository administrator. ${RULES.selfReview}`,
+        `⚠️ @${actor}, \`/self-approve\` is only for a ticket reviewer who is also its assignee, or for a repository administrator. ${RULES.selfReview}${
+          reviewerOfAll(actor, issues) ? ' You’re the reviewer and not the assignee, so just comment `/approve`.' : ''
+        }`,
       );
     }
     await this.github.rest.issues.addLabels({ ...this.repo, issue_number: prNumber, labels: ['rule exception'] });
     for (const issue of issues) await this.setStatus(issue, 'reviewed', { quiet: true });
     await this.comment(prNumber, `🟠 **Rule exception recorded** by @${actor} (${who.as}): “${reason}”\n\n${RULES.selfReview} This exception is kept on the pull request and its \`rule exception\` label. The Review gate will now pass.`);
+    await this.rerunReviewGate(pr);
+  }
+
+  /**
+   * "/approve": the ticket's reviewer approves by comment. It counts exactly like
+   * GitHub's Approve button, which GitHub hides from whoever opened the pull request.
+   */
+  async onApproveComment(prNumber, actor) {
+    const pr = (await this.github.rest.pulls.get({ ...this.repo, pull_number: prNumber })).data;
+    const issues = await this.issuesFor(pr);
+    if (!issues.length) return this.comment(prNumber, '⚠️ `/approve` needs the pull request to be linked to a ticket first (`Closes #<number>`).');
+    if (!reviewerOfAll(actor, issues)) {
+      return this.comment(prNumber, `⚠️ @${actor}, only the ticket’s reviewer can \`/approve\`. To become the reviewer, comment \`/review\` on ${issues.map((i) => `#${i.number}`).join(', ')}.`);
+    }
+    if (assigneeOfAny(actor, issues)) {
+      return this.comment(prNumber, `⚠️ @${actor}, you’re both the assignee and the reviewer, so your approval doesn’t count on its own. ${RULES.selfReview}`);
+    }
+    for (const issue of issues) await this.setStatus(issue, 'reviewed', { quiet: true });
+    await this.comment(prNumber, `✅ Approved by @${actor}, the ticket’s reviewer. @${actor}, please **merge** when the checks are green.`);
     await this.rerunReviewGate(pr);
   }
 
@@ -574,7 +602,9 @@ class TicketBot {
       const who = review.user.login;
       if (!reviewers.includes(who.toLowerCase())) continue;
       const state = String(review.state).toUpperCase();
-      if (state === 'APPROVED') {
+      if (state === 'APPROVED' && assigneeOfAny(who, [issue])) {
+        await this.comment(pr.number, `⚠️ @${who} is both assignee and reviewer of #${issue.number}, so this approval doesn’t count on its own. ${RULES.selfReview}`);
+      } else if (state === 'APPROVED') {
         await this.setStatus(issue, 'reviewed', { quiet: true });
         await this.comment(pr.number, `✅ Approved by @${who}. @${who}, you're the reviewer, so please **merge** when the checks are green.`);
       } else if (state === 'CHANGES_REQUESTED') {
@@ -620,24 +650,59 @@ class TicketBot {
   async reviewGate(pr) {
     const issues = await this.issuesFor(pr);
     if (!issues.length) return { ok: false, message: 'Not linked to a ticket. Add "Closes #<number>" to the pull request description.' };
-    const reviews = await this.github.paginate(this.github.rest.pulls.listReviews, { ...this.repo, pull_number: pr.number, per_page: 100 });
-    const latest = latestReviews(reviews, pr.head && pr.head.sha);
+    const latest = await this.latestApprovals(pr);
     let exceptions = null; // looked up only when needed
     for (const issue of issues) {
-      const reviewers = parseMeta(issue.body).reviewers.map((r) => r.toLowerCase());
+      const reviewers = parseMeta(issue.body).reviewers.map(lc);
+      const assignees = (issue.assignees || []).map((a) => lc(a.login));
+      const eligible = reviewers.filter((r) => !assignees.includes(r)); // assignee ≠ reviewer
       const blocking = reviewers.filter((r) => latest[r] === 'CHANGES_REQUESTED');
       if (blocking.length) return { ok: false, message: `Changes requested by ${blocking.map((r) => '@' + r).join(', ')}.` };
-      if (reviewers.some((r) => latest[r] === 'APPROVED')) continue;
+      if (eligible.some((r) => latest[r] === 'APPROVED')) continue;
       exceptions ??= await this.validExceptions(pr, issues);
       if (exceptions.length) continue;
       if (!reviewers.length) return { ok: false, message: `Ticket #${issue.number} has no reviewer. Comment "/reviewer @name" on it.` };
-      return { ok: false, message: `Waiting for approval from the reviewer of #${issue.number}: ${reviewers.map((r) => '@' + r).join(', ')}.` };
+      if (!eligible.length) {
+        return { ok: false, message: `${reviewers.map((r) => '@' + r).join(', ')} is both assignee and reviewer of #${issue.number}. Add another reviewer, or record an exception with "/self-approve <reason>".` };
+      }
+      return { ok: false, message: `Waiting for approval from the reviewer of #${issue.number}: ${eligible.map((r) => '@' + r).join(', ')} (Approve button, or comment "/approve" on the pull request).` };
     }
     if (exceptions && exceptions.length) {
       const e = exceptions[exceptions.length - 1];
       return { ok: true, message: `Rule exception recorded by @${e.by}: ${e.reason}` };
     }
     return { ok: true, message: 'Approved by the ticket reviewer.' };
+  }
+
+  /**
+   * Latest decision per person, from GitHub reviews and "/approve" comments together,
+   * in time order. Approvals given before the latest commit become STALE_APPROVAL.
+   */
+  async latestApprovals(pr) {
+    const headSha = pr.head && pr.head.sha;
+    const reviews = await this.github.paginate(this.github.rest.pulls.listReviews, { ...this.repo, pull_number: pr.number, per_page: 100 });
+    const comments = await this.github.paginate(this.github.rest.issues.listComments, { ...this.repo, issue_number: pr.number, per_page: 100 });
+    let headTime = '';
+    try {
+      headTime = (await this.github.rest.repos.getCommit({ ...this.repo, ref: headSha })).data.commit.committer.date || '';
+    } catch {
+      /* unknown: don't mark comment approvals stale */
+    }
+    const events = [];
+    reviews.forEach((r, i) => {
+      if (!r.user || r.state === 'COMMENTED' || r.state === 'PENDING') return;
+      const stale = headSha && r.commit_id && r.commit_id !== headSha;
+      events.push({ login: lc(r.user.login), state: stale && r.state === 'APPROVED' ? 'STALE_APPROVAL' : r.state, at: r.submitted_at || '', seq: i });
+    });
+    comments.forEach((c, i) => {
+      if (!c.user || /\[bot\]$/.test(c.user.login) || !parseCommands(c.body).some((x) => x.name === 'approve')) return;
+      const stale = headTime && c.created_at && c.created_at < headTime;
+      events.push({ login: lc(c.user.login), state: stale ? 'STALE_APPROVAL' : 'APPROVED', at: c.created_at || '', seq: 100_000 + i });
+    });
+    events.sort((a, b) => a.at.localeCompare(b.at) || a.seq - b.seq);
+    const latest = {};
+    for (const e of events) latest[e.login] = e.state;
+    return latest;
   }
 
   /** Scheduled: cards dragged on the board → labels and side effects; issues missing from the board → added. */
