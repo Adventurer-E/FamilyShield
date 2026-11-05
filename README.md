@@ -69,7 +69,7 @@ bank’s existing app, so:
 
 ## Part 2 · For developers
 
-**New here? Start with the [developer guide](docs/dev/README.md).** It assumes
+**New here? Start with the [developer guide in the wiki](https://github.com/Adventurer-E/FamilyShield/wiki).** It assumes
 no web-development experience and walks through everything below in more detail.
 
 ### Run it
@@ -87,16 +87,16 @@ npm run dev        # then open http://localhost:5173
 
 | I want to… | Read |
 | --- | --- |
-| Set up my computer step by step | [Setup](docs/dev/01-setup.md) |
-| Understand what all the folders are | [The big picture](docs/dev/02-big-picture.md) |
-| Change something I see on screen | [Find and change anything](docs/dev/03-find-and-change.md), then the page for that screen in [**Screen by screen**](docs/dev/screens/README.md) |
+| Set up my computer step by step | [Setup](https://github.com/Adventurer-E/FamilyShield/wiki/Setup) |
+| Understand what all the folders are | [The big picture](https://github.com/Adventurer-E/FamilyShield/wiki/The-big-picture) |
+| Change something I see on screen | [Find and change anything](https://github.com/Adventurer-E/FamilyShield/wiki/Find-and-change-anything), then the page for that screen in [**Screen by screen**](https://github.com/Adventurer-E/FamilyShield/wiki/Screen-by-screen) |
 | Change a number (balance, fee, reward) | [`data/README.md`](data/README.md). It's a CSV file, not code |
-| Understand the back-end and the CSV data | [The data and the back-end](docs/dev/04-data-and-backend.md) |
-| Follow a recipe for a common change | [Recipes](docs/dev/05-recipes.md) |
-| Run tests; understand CI and preview links | [Testing and checks](docs/dev/06-testing.md) |
-| Pick up a ticket, branch, get reviewed, merge | [How we work as a team](docs/dev/07-team-workflow.md) |
-| Look up a word | [Glossary](docs/dev/glossary.md) |
-| Set up the board, tokens and branch rules (repo admin) | [One-time GitHub setup](docs/dev/github-setup.md) |
+| Understand the back-end and the CSV data | [The data and the back-end](https://github.com/Adventurer-E/FamilyShield/wiki/Data-and-back-end) |
+| Follow a recipe for a common change | [Recipes](https://github.com/Adventurer-E/FamilyShield/wiki/Recipes) |
+| Run tests; understand CI and preview links | [Testing and checks](https://github.com/Adventurer-E/FamilyShield/wiki/Testing-and-checks) |
+| Pick up a ticket, branch, get reviewed, merge | [How we work as a team](https://github.com/Adventurer-E/FamilyShield/wiki/Team-workflow) |
+| Look up a word | [Glossary](https://github.com/Adventurer-E/FamilyShield/wiki/Glossary) |
+| Set up the board, tokens and branch rules (repo admin) | [One-time GitHub setup](https://github.com/Adventurer-E/FamilyShield/wiki/GitHub-setup) |
 
 ### Repository at a glance
 
@@ -107,7 +107,7 @@ packages/core/      Business rules: fees, schedules, points, rewards
 packages/service/   Back-end logic over the CSV data
 packages/server/    The back-end web server (port 8787)
 data/               The CSV "fake database" (shared starting state; your copy is data/local/)
-docs/               Product, architecture, API and developer guides
+docs/               Architecture, integration and API reference (developer guide: the wiki)
 .github/            CI, previews, deploys and the ticket workflow
 ```
 
@@ -119,7 +119,7 @@ docs/               Product, architecture, API and developer guides
 | `npm run check` | All checks GitHub runs: types, tests, build |
 | `npm run data:reset` | Start your data over from the shared state |
 
-More in [Testing and checks](docs/dev/06-testing.md) and [The data and the back-end](docs/dev/04-data-and-backend.md).
+More in [Testing and checks](https://github.com/Adventurer-E/FamilyShield/wiki/Testing-and-checks) and [The data and the back-end](https://github.com/Adventurer-E/FamilyShield/wiki/Data-and-back-end).
 
 ### Reference docs
 

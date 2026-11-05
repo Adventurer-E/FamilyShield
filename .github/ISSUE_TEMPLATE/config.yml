@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Developer guide
-    url: https://github.com/Adventurer-E/FamilyShield/blob/main/docs/dev/README.md
+    url: https://github.com/Adventurer-E/FamilyShield/wiki
     about: How the code is organized and how to change each screen.

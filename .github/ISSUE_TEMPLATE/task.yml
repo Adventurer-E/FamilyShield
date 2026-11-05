@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         New tickets start in **Icebox**. When someone picks it up, they comment `/start` (or drag the card to **In progress**), and a branch is created.
-        Not sure what to write? See [How we work as a team](https://github.com/Adventurer-E/FamilyShield/blob/main/docs/dev/07-team-workflow.md).
+        Not sure what to write? See [How we work as a team](https://github.com/Adventurer-E/FamilyShield/wiki/Team-workflow).
   - type: textarea
     id: what
     attributes:
@@ -28,7 +28,7 @@ body:
     id: area
     attributes:
       label: Where in the app
-      description: Helps people find the right guide in docs/dev/screens/.
+      description: Helps people find the right screen guide in the wiki.
       multiple: true
       options:
         - Bank home / top bar

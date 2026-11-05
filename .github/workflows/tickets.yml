@@ -1,6 +1,6 @@
 name: Tickets
 
-# Runs the Kanban workflow (see docs/dev/07-team-workflow.md):
+# Runs the Kanban workflow (see the wiki page Team-workflow):
 #   ticket commands (/start, /reviewer …), status labels + board column,
 #   a branch per ticket, review requests, and the merge-by-reviewer reminder.
 # Logic and tests: .github/scripts/tickets.cjs, tickets.test.cjs

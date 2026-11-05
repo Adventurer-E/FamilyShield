@@ -2,7 +2,7 @@ name: Review gate
 
 # A required check on every pull request: green only when a reviewer named on
 # the linked ticket has approved, and nobody named on it requested changes.
-# Branch protection on main requires this check (see docs/dev/github-setup.md).
+# Branch protection on main requires this check (see the wiki page GitHub-setup).
 
 on:
   pull_request:
