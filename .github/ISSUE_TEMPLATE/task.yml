@@ -26,6 +26,9 @@ body:
       options:
         - Nobody yet (decide later)
         - '@Adventurer-E'
+        - '@yj624-YichenJi'
+        - '@tft32-cs'
+        - '@Jason0192837465'
       default: 0
   - type: dropdown
     id: reviewer
@@ -35,4 +38,7 @@ body:
       options:
         - Nobody yet (decide later)
         - '@Adventurer-E'
+        - '@yj624-YichenJi'
+        - '@tft32-cs'
+        - '@Jason0192837465'
       default: 0
