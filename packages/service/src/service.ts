@@ -1,0 +1,368 @@
+import {
+  FamilyShieldError,
+  cancelPause,
+  cancelRequest,
+  claimReward,
+  createLoanCase,
+  getReward,
+  isOpen,
+  recordPayment,
+  requestPause,
+  respondToPause,
+  respondToRequest,
+  setOfferAccepted,
+  signAsBorrower,
+  signAsLender,
+} from '@familyshield/core';
+import type {
+  AccountSummary,
+  AppConfig,
+  CreateRequestInput,
+  LenderResponse,
+  LoanCase,
+  MockupPerson,
+  Person,
+  Profile,
+} from '@familyshield/core';
+import { emptyActivity, readDatabase, writeActivity } from './database';
+import type { CsvFiles, Database } from './database';
+
+/**
+ * Where the CSV files live. Setup tables always come from the shared, committed
+ * data/ folder. Activity tables come from a working copy: data/local/ on disk
+ * for the Node server (git-ignored), localStorage in the browser build.
+ */
+export interface CsvStorage {
+  /** Every table, setup and activity, as CSV text keyed by file name. */
+  read(): CsvFiles;
+  /** Called with the activity tables only; setup tables are never rewritten. */
+  write(activity: CsvFiles): void;
+  /**
+   * Put the working copy back to the shared starting state in data/.
+   * Without it, reset empties the activity tables.
+   */
+  reset?(): void;
+}
+
+export interface ServiceOptions {
+  now?: () => Date;
+  random?: () => number;
+  /** How long an auto-signing relative waits after the borrower signs. */
+  autoSignDelayMs?: number;
+  /** How long an auto-approving relative waits before answering a pause. */
+  autoPauseDelayMs?: number;
+}
+
+/** What a lender may see: their own offer, agreement, payouts and pause answer only. */
+export function redactForLender(loan: LoanCase, viewerId: string): LoanCase {
+  const copy = structuredClone(loan);
+  copy.offers = copy.offers.filter((o) => o.memberId === viewerId);
+  copy.agreements = copy.agreements.filter((a) => a.lenderId === viewerId);
+  copy.schedule = copy.schedule.map((i) => {
+    const parts = i.parts.filter((p) => p.to === viewerId);
+    return { ...i, parts, amount: parts.reduce((t, p) => t + p.amount, 0) };
+  });
+  if (copy.pause) {
+    copy.pause.approvals = viewerId in copy.pause.approvals ? { [viewerId]: copy.pause.approvals[viewerId] ?? null } : {};
+  }
+  return copy;
+}
+
+/**
+ * The FamilyShield backend, minus HTTP: every operation the API offers,
+ * applied to the CSV database with the shared @familyshield/core rules.
+ *
+ * Each call reads the CSVs fresh, so edits made by hand show up immediately.
+ * Scripted relatives (auto_replies.csv) are evaluated lazily from timestamps:
+ * there are no timers to lose, and `tick()` simply applies whatever is due.
+ */
+export class FamilyShieldService {
+  private readonly storage: CsvStorage;
+  private readonly now: () => Date;
+  private readonly random: () => number;
+  private readonly autoSignDelayMs: number;
+  private readonly autoPauseDelayMs: number;
+  private seq = 0;
+
+  constructor(storage: CsvStorage, options: ServiceOptions = {}) {
+    this.storage = storage;
+    this.now = options.now ?? (() => new Date());
+    this.random = options.random ?? Math.random;
+    this.autoSignDelayMs = options.autoSignDelayMs ?? 1_500;
+    this.autoPauseDelayMs = options.autoPauseDelayMs ?? 1_500;
+  }
+
+  // ------------------------------------------------------------ plumbing
+
+  private iso(): string {
+    return this.now().toISOString();
+  }
+
+  private id(prefix: string): string {
+    this.seq += 1;
+    const rand = Math.floor(this.random() * 36 ** 3).toString(36).padStart(3, '0');
+    return `${prefix}_${this.now().getTime().toString(36)}${rand}${this.seq}`;
+  }
+
+  /** Load the database and apply any scripted actions that are due. */
+  private open(): Database {
+    const db = readDatabase(this.storage.read());
+    if (this.automate(db)) this.storage.write(writeActivity(db));
+    return db;
+  }
+
+  private user(db: Database, userId: string) {
+    const person = db.people.find((p) => p.id === userId);
+    if (!person) throw new FamilyShieldError('NOT_FOUND', `Unknown user "${userId}". Add them to people.csv.`);
+    return person;
+  }
+
+  private loan(db: Database, loanId: string): LoanCase {
+    const loan = db.loans.find((l) => l.id === loanId);
+    if (!loan) throw new FamilyShieldError('NOT_FOUND', 'That request no longer exists.');
+    return loan;
+  }
+
+  private nickname(db: Database, viewerId: string, personId: string): string {
+    const c = db.circles.find((x) => x.ownerId === viewerId && x.memberId === personId);
+    if (c?.nickname) return c.nickname;
+    return db.people.find((p) => p.id === personId)?.firstName ?? 'Family member';
+  }
+
+  private post(db: Database, userId: string, amount: number, memo: string): void {
+    db.transactions.push({ id: this.id('txn'), userId, at: this.iso(), amount, memo });
+  }
+
+  /** Bank ledger postings when a loan is funded or an installment is paid. */
+  private settle(db: Database, before: LoanCase, after: LoanCase): void {
+    if (before.status === 'signing' && after.status === 'active') {
+      for (const a of after.agreements) {
+        this.post(db, after.borrowerId, a.principal, `FamilyShield loan from ${this.nickname(db, after.borrowerId, a.lenderId)}`);
+        this.post(db, a.lenderId, -a.principal, `FamilyShield loan to ${this.nickname(db, a.lenderId, after.borrowerId)}`);
+      }
+    }
+    for (const inst of after.schedule) {
+      if (inst.paidAt && !before.schedule[inst.index]?.paidAt) {
+        this.post(db, after.borrowerId, -inst.amount, `FamilyShield payment ${inst.index + 1} of ${after.schedule.length}`);
+        for (const part of inst.parts) {
+          if (part.to !== 'fee') this.post(db, part.to, part.amount, `FamilyShield repayment from ${this.nickname(db, part.to, after.borrowerId)}`);
+        }
+      }
+    }
+  }
+
+  /** Apply one transition to one loan, settle money, and persist. */
+  private apply(db: Database, loanId: string, fn: (loan: LoanCase) => LoanCase): LoanCase {
+    const before = this.loan(db, loanId);
+    const after = fn(before);
+    db.loans = db.loans.map((l) => (l.id === loanId ? after : l));
+    this.settle(db, before, after);
+    return after;
+  }
+
+  private mutate(loanId: string, fn: (loan: LoanCase, db: Database) => LoanCase, check?: (loan: LoanCase) => void): LoanCase {
+    const db = this.open();
+    if (check) check(this.loan(db, loanId));
+    const after = this.apply(db, loanId, (l) => fn(l, db));
+    this.automate(db);
+    this.storage.write(writeActivity(db));
+    return db.loans.find((l) => l.id === after.id)!;
+  }
+
+  /** Scripted relatives from auto_replies.csv. Returns true if anything changed. */
+  private automate(db: Database): boolean {
+    const now = this.now().getTime();
+    const at = this.iso();
+    let changed = false;
+    for (const loan of [...db.loans]) {
+      const current = () => this.loan(db, loan.id);
+      for (const auto of db.autoReplies) {
+        let l = current();
+        const offer = l.offers.find((o) => o.memberId === auto.memberId);
+        if (l.status === 'collecting' && offer?.status === 'pending' && Date.parse(l.createdAt) + auto.replyAfterSeconds * 1000 <= now) {
+          const amount = Math.floor(Math.min(auto.offerAmount || l.amount, l.amount) / 100) * 100;
+          this.apply(db, l.id, (x) =>
+            respondToRequest(x, auto.memberId, auto.reply === 'offer' && amount >= 100 ? { kind: 'offer', amount, note: auto.note } : { kind: 'decline', note: auto.note }, at),
+          );
+          changed = true;
+          l = current();
+        }
+        const agreement = l.agreements.find((a) => a.lenderId === auto.memberId);
+        if (
+          auto.autoSign &&
+          l.status === 'signing' &&
+          agreement &&
+          !agreement.lenderSignedAt &&
+          agreement.borrowerSignedAt &&
+          Date.parse(agreement.borrowerSignedAt) + this.autoSignDelayMs <= now
+        ) {
+          this.apply(db, l.id, (x) => signAsLender(x, auto.memberId, at, db.rules));
+          changed = true;
+          l = current();
+        }
+        if (
+          auto.autoApprovePause &&
+          l.pause?.status === 'pending' &&
+          l.pause.approvals[auto.memberId] === null &&
+          Date.parse(l.pause.requestedAt) + this.autoPauseDelayMs <= now
+        ) {
+          this.apply(db, l.id, (x) => respondToPause(x, auto.memberId, true));
+          changed = true;
+        }
+      }
+    }
+    return changed;
+  }
+
+  // ------------------------------------------------------------ host / mockup
+
+  /** Apply due scripted actions. Hosts call this on a short interval. */
+  tick(): boolean {
+    const db = readDatabase(this.storage.read());
+    const changed = this.automate(db);
+    if (changed) this.storage.write(writeActivity(db));
+    return changed;
+  }
+
+  /** Back to the shared starting state (setup tables are untouched). */
+  reset(): void {
+    if (this.storage.reset) this.storage.reset();
+    else this.storage.write(emptyActivity());
+  }
+
+  people(): MockupPerson[] {
+    return this.open().people.map(({ id, firstName, lastName, accountLabel }) => ({ id, firstName, lastName, accountLabel }));
+  }
+
+  account(userId: string): AccountSummary {
+    const db = this.open();
+    const person = this.user(db, userId);
+    const mine = db.transactions.filter((t) => t.userId === userId);
+    return {
+      balance: person.openingBalance + mine.reduce((s, t) => s + t.amount, 0),
+      transactions: mine.map(({ id, at, amount, memo }) => ({ id, at, amount, memo })).reverse(),
+    };
+  }
+
+  // ------------------------------------------------------------ reads
+
+  config(): AppConfig {
+    const db = this.open();
+    return { rules: db.rules, rewards: db.rewards };
+  }
+
+  profile(userId: string): Profile {
+    const db = this.open();
+    const me = this.user(db, userId);
+    const toPerson = (id: string): Person => {
+      const p = db.people.find((x) => x.id === id)!;
+      const nickname = db.circles.find((c) => c.ownerId === userId && c.memberId === id)?.nickname;
+      return { id: p.id, firstName: p.firstName, lastName: p.lastName, ...(nickname ? { nickname } : {}) };
+    };
+    const circleIds = db.circles.filter((c) => c.ownerId === userId).map((c) => c.memberId);
+    const askedBy = db.loans.filter((l) => l.offers.some((o) => o.memberId === userId)).map((l) => l.borrowerId);
+    const visible = [...new Set([...circleIds, ...askedBy])].filter((id) => id !== userId && db.people.some((p) => p.id === id));
+    return {
+      me: { id: me.id, firstName: me.firstName, lastName: me.lastName },
+      circle: circleIds.filter((id) => db.people.some((p) => p.id === id)).map(toPerson),
+      people: visible.map(toPerson),
+      account: { id: `acct-${me.id}`, label: me.accountLabel },
+    };
+  }
+
+  myLoan(userId: string): LoanCase | null {
+    const db = this.open();
+    this.user(db, userId);
+    const mine = db.loans.filter((l) => l.borrowerId === userId && l.status !== 'cancelled');
+    return mine.at(-1) ?? null;
+  }
+
+  incoming(userId: string): LoanCase[] {
+    const db = this.open();
+    this.user(db, userId);
+    return db.loans
+      .filter((l) => l.status !== 'cancelled' && l.borrowerId !== userId && l.offers.some((o) => o.memberId === userId))
+      .map((l) => redactForLender(l, userId))
+      .reverse();
+  }
+
+  // ------------------------------------------------------------ borrower
+
+  createRequest(userId: string, input: CreateRequestInput): LoanCase {
+    const db = this.open();
+    this.user(db, userId);
+    if (db.loans.some((l) => l.borrowerId === userId && isOpen(l))) {
+      throw new FamilyShieldError('INVALID_STATE', 'You already have an open request or loan.');
+    }
+    const loan = createLoanCase(
+      {
+        id: this.id('loan'),
+        borrowerId: userId,
+        circle: db.circles.filter((c) => c.ownerId === userId).map((c) => c.memberId),
+        reason: input.reason,
+        purpose: input.purpose,
+        amount: input.amount,
+        months: input.months,
+        now: this.iso(),
+      },
+      db.rules,
+    );
+    db.loans.push(loan);
+    this.storage.write(writeActivity(db));
+    return loan;
+  }
+
+  private asBorrower(userId: string) {
+    return (loan: LoanCase) => {
+      if (loan.borrowerId !== userId) throw new FamilyShieldError('FORBIDDEN', 'This isn’t your request.');
+    };
+  }
+
+  private asLender(userId: string) {
+    return (loan: LoanCase) => {
+      if (!loan.offers.some((o) => o.memberId === userId)) throw new FamilyShieldError('FORBIDDEN', 'You weren’t asked on this request.');
+    };
+  }
+
+  cancelRequest(userId: string, loanId: string) {
+    return this.mutate(loanId, cancelRequest, this.asBorrower(userId));
+  }
+  setOfferAccepted(userId: string, loanId: string, memberId: string, accepted: boolean) {
+    return this.mutate(loanId, (l) => setOfferAccepted(l, memberId, accepted), this.asBorrower(userId));
+  }
+  signAsBorrower(userId: string, loanId: string) {
+    return this.mutate(loanId, (l, db) => signAsBorrower(l, this.iso(), db.rules), this.asBorrower(userId));
+  }
+  makePayment(userId: string, loanId: string) {
+    return this.mutate(loanId, (l, db) => recordPayment(l, this.iso(), db.rules), this.asBorrower(userId));
+  }
+  requestPause(userId: string, loanId: string) {
+    return this.mutate(loanId, (l, db) => requestPause(l, this.iso(), db.rules), this.asBorrower(userId));
+  }
+  cancelPause(userId: string, loanId: string) {
+    return this.mutate(loanId, cancelPause, this.asBorrower(userId));
+  }
+  claimReward(userId: string, loanId: string, rewardId: string) {
+    return this.mutate(
+      loanId,
+      (l, db) => {
+        const reward = getReward(rewardId, db.rewards);
+        const code = `FS-${reward.partner.split(/\s/)[0]!.toUpperCase().replace(/[^A-Z0-9]/g, '')}-${Math.floor(1000 + this.random() * 9000)}`;
+        return claimReward(l, rewardId, code, this.iso(), db.rewards);
+      },
+      this.asBorrower(userId),
+    );
+  }
+
+  // ------------------------------------------------------------ lender
+
+  respond(userId: string, loanId: string, response: LenderResponse) {
+    return redactForLender(this.mutate(loanId, (l) => respondToRequest(l, userId, response, this.iso()), this.asLender(userId)), userId);
+  }
+  signAsLender(userId: string, loanId: string) {
+    return redactForLender(this.mutate(loanId, (l, db) => signAsLender(l, userId, this.iso(), db.rules), this.asLender(userId)), userId);
+  }
+  respondToPause(userId: string, loanId: string, approve: boolean) {
+    return redactForLender(this.mutate(loanId, (l) => respondToPause(l, userId, approve), this.asLender(userId)), userId);
+  }
+}

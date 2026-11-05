@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   FamilyShieldError,
-  POINTS,
-  REWARDS,
+  DEFAULT_REWARDS,
+  DEFAULT_RULES,
   claimReward,
   createLoanCase,
   getReward,
@@ -21,6 +21,7 @@ import {
 import type { LoanCase } from '../src';
 
 const T0 = '2026-11-05T15:00:00.000Z';
+const P = DEFAULT_RULES.points;
 
 function newRequest(overrides: Partial<Parameters<typeof createLoanCase>[0]> = {}): LoanCase {
   return createLoanCase({
@@ -155,17 +156,17 @@ describe('repayment schedule', () => {
 describe('points', () => {
   it('gives the demo family 1,200 points: 2 helpers + 10 on-time payments + completion', () => {
     let loan = fundedLoan();
-    expect(loan.points).toBe(2 * POINTS.HELP);
+    expect(loan.points).toBe(2 * P.help);
     loan = payAll(loan);
     expect(loan.status).toBe('repaid');
-    expect(loan.points).toBe(2 * POINTS.HELP + 10 * POINTS.ON_TIME + POINTS.COMPLETE);
+    expect(loan.points).toBe(2 * P.help + 10 * P.onTime + P.complete);
     expect(loan.points).toBe(1_200);
   });
 
   it('gives no on-time points for late payments', () => {
     const loan = recordPayment(fundedLoan(), '2027-01-20T00:00:00.000Z');
     expect(loan.schedule[0]!.onTime).toBe(false);
-    expect(loan.points).toBe(2 * POINTS.HELP);
+    expect(loan.points).toBe(2 * P.help);
   });
 });
 
@@ -203,7 +204,7 @@ describe('rewards', () => {
     expect(() => claimReward(loan, 'dinner', 'CODE', T0)).toThrow(/fully repaid/);
 
     loan = recordPayment(loan, T0);
-    expect(REWARDS.map((r) => rewardStatus(loan, r))).toEqual(['available', 'available', 'locked']);
+    expect(DEFAULT_REWARDS.map((r) => rewardStatus(loan, r))).toEqual(['available', 'available', 'locked']);
   });
 
   it('can be claimed once', () => {
@@ -220,4 +221,31 @@ it('never mutates its input', () => {
   recordPayment(before, T0);
   requestPause(before, T0);
   expect(JSON.stringify(before)).toBe(snapshot);
+});
+
+describe('custom rules (e.g. from data/settings.csv)', () => {
+  const rules = {
+    ...DEFAULT_RULES,
+    feeRate: 0.03,
+    amountMin: 100_000,
+    amountStep: 50_000,
+    terms: [3, 6],
+    points: { help: 50, onTime: 10, complete: 500 },
+  };
+
+  it('validates against the configured limits and terms', () => {
+    expect(() => createLoanCase({ id: 'x', borrowerId: 'alex', circle: ['mom'], reason: 'car', purpose: 'p', amount: 50_000, months: 6, now: T0 }, rules)).toThrow(/between/);
+    expect(() => createLoanCase({ id: 'x', borrowerId: 'alex', circle: ['mom'], reason: 'car', purpose: 'p', amount: 150_000, months: 10, now: T0 }, rules)).toThrow(/term/);
+  });
+
+  it('applies the configured fee and points', () => {
+    let loan = createLoanCase({ id: 'x', borrowerId: 'alex', circle: ['mom'], reason: 'car', purpose: 'p', amount: 100_000, months: 3, now: T0 }, rules);
+    loan = respondToRequest(loan, 'mom', { kind: 'offer', amount: 100_000 }, T0);
+    loan = setOfferAccepted(loan, 'mom', true);
+    loan = signAsBorrower(loan, T0, rules);
+    loan = signAsLender(loan, 'mom', T0, rules);
+    expect(loan.agreements[0]).toMatchObject({ fee: 3_000, total: 103_000 });
+    while (loan.status === 'active') loan = recordPayment(loan, T0, rules);
+    expect(loan.points).toBe(50 + 3 * 10 + 500);
+  });
 });

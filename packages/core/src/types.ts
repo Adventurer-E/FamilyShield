@@ -1,6 +1,5 @@
 import type { Cents } from './money';
 import type { IsoDate, IsoTimestamp } from './dates';
-import type { TermMonths } from './config';
 
 export type PersonId = string;
 
@@ -83,7 +82,7 @@ export interface LoanCase {
   reason: Reason;
   purpose: string;
   amount: Cents;
-  months: TermMonths;
+  months: number;
   status: LoanStatus;
   createdAt: IsoTimestamp;
   offers: Offer[];

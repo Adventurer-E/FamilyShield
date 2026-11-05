@@ -1,47 +1,67 @@
 name: Deploy functional mockup to GitHub Pages
 
-# Publishes the BlueRiver functional mockup (apps/demo-bank) at
-# https://adventurer-e.github.io/FamilyShield/ on every push to main.
-# One-time setup: Settings → Pages → Source: "GitHub Actions".
+# Publishes the BlueRiver functional mockup (apps/demo-bank), in browser mode
+# (CSV files from data/ bundled into the page), to the gh-pages branch:
+#
+#   main               → https://adventurer-e.github.io/FamilyShield/
+#   pull request #N    → https://adventurer-e.github.io/FamilyShield/pr-preview/pr-N/
+#
+# Each pull request gets a bot comment with its preview link, updated on every
+# push and removed when the pull request is closed or merged.
+#
+# One-time setup: Settings → Pages → Build and deployment →
+#   Source: "Deploy from a branch", Branch: gh-pages, Folder: / (root)
 
 on:
   push:
     branches: [main]
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write # push to gh-pages
+  pull-requests: write # comment the preview link
 
+# One deploy at a time so pushes to gh-pages never race; queue, don't cancel.
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: gh-pages
+  cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
+    # Pull requests from forks get a read-only token, so they can't publish previews.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
+        if: github.event.action != 'closed'
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: package.json
-      - name: Install
-        run: npm install --no-audit --no-fund
-      - name: Build functional mockup
-        run: npm run build -w @familyshield/demo-bank
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: apps/demo-bank/dist
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Build functional mockup
+        if: github.event.action != 'closed'
+        run: |
+          npm install --no-audit --no-fund
+          npm run build -w @familyshield/demo-bank
+          touch apps/demo-bank/dist/.nojekyll
+
+      - name: Publish main site
+        if: github.event_name != 'pull_request'
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: apps/demo-bank/dist
+          clean-exclude: pr-preview/
+
+      - name: Publish or remove pull request preview
+        if: github.event_name == 'pull_request'
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: apps/demo-bank/dist
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview

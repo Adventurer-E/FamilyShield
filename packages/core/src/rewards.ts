@@ -7,7 +7,8 @@ import type { LoanCase } from './types';
  * a referral commission on bookings. Offers unlock only when the loan is fully
  * repaid AND the circle's points have reached the threshold.
  *
- * The partners below are placeholders for the demo.
+ * The partners below are placeholders. In the functional mockup the catalog
+ * comes from data/rewards.csv; this list is the default.
  */
 export interface Reward {
   id: string;
@@ -23,7 +24,7 @@ export interface Reward {
   validForMonths: number;
 }
 
-export const REWARDS: readonly Reward[] = [
+export const DEFAULT_REWARDS: readonly Reward[] = [
   {
     id: 'dinner',
     name: 'Family dinner',
@@ -70,8 +71,8 @@ export type RewardStatus =
   | 'available'
   | 'claimed';
 
-export function getReward(id: string): Reward {
-  const reward = REWARDS.find((r) => r.id === id);
+export function getReward(id: string, catalog: readonly Reward[] = DEFAULT_REWARDS): Reward {
+  const reward = catalog.find((r) => r.id === id);
   invariant(reward, 'NOT_FOUND', 'That reward doesn’t exist.');
   return reward;
 }
@@ -87,8 +88,14 @@ export function pointsToGo(loan: LoanCase, reward: Reward): number {
   return Math.max(0, reward.threshold - loan.points);
 }
 
-export function claimReward(loan: LoanCase, rewardId: string, code: string, _now: IsoTimestamp): LoanCase {
-  const reward = getReward(rewardId);
+export function claimReward(
+  loan: LoanCase,
+  rewardId: string,
+  code: string,
+  _now: IsoTimestamp,
+  catalog: readonly Reward[] = DEFAULT_REWARDS,
+): LoanCase {
+  const reward = getReward(rewardId, catalog);
   const status = rewardStatus(loan, reward);
   invariant(status !== 'claimed', 'INVALID_STATE', 'Your family already claimed this offer.');
   invariant(status === 'available', 'INVALID_STATE', 'This offer unlocks when the loan is fully repaid.');

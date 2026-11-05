@@ -1,0 +1,4 @@
+id,name,short_label,points_needed,category,partner,headline,detail,terms,valid_for_months
+dinner,Family dinner,DIN,500,Partner restaurants,Juniper Table,25% off a family dinner,A family-style dinner for up to 6 at any Juniper Table location. Celebrate together.,Sunday to Thursday only. One use per family. Alcohol excluded.,3
+trip,Weekend trip,TRIP,1000,Partner hotels,Harborline Inn,20% off a weekend stay,"Two nights for the whole circle at any Harborline Inn, breakfast included.",Up to 3 rooms on one booking. Blackout dates apply.,3
+activity,Group activity,FUN,1500,Local experiences,Summit Climb Co.,Free group session for 4,"An instructor-led climbing session for four, plus 15% off for anyone else who joins.",Ages 8+. Reserve 48 hours ahead.,3

@@ -1,11 +1,12 @@
-import { MAX_PAUSES, POINTS, REWARDS, formatDate, formatMoney, nextInstallment, pointsToGo, repaymentSummary, rewardStatus } from '@familyshield/core';
+import { formatDate, formatMoney, nextInstallment, pointsToGo, repaymentSummary, rewardStatus } from '@familyshield/core';
 import type { LoanCase } from '@familyshield/core';
 import { useFs } from '../context';
 import { Button, DemoHint, Progress, Screen } from '../kit';
 import { CheckIcon, PauseIcon, StarIcon } from '../icons';
 
 export function Repay({ loan }: { loan: LoanCase }) {
-  const { api, run, go, emit, nameOf, demo } = useFs();
+  const { api, run, go, emit, nameOf, demo, data } = useFs();
+  const { rules, rewards: REWARDS } = data.config;
   const s = repaymentSummary(loan);
   const next = nextInstallment(loan);
   const repaid = loan.status === 'repaid';
@@ -64,7 +65,7 @@ export function Repay({ loan }: { loan: LoanCase }) {
         </div>
         <Progress value={s.progress} label="Repaid so far" />
         <div className="fs-tiny fs-muted">
-          {formatMoney(s.principal)} borrowed + {formatMoney(s.fee)} service fee (5%) · {s.paymentsMade} of {s.paymentsTotal} payments
+          {formatMoney(s.principal)} borrowed + {formatMoney(s.fee)} service fee ({s.principal ? `${+((s.fee / s.principal) * 100).toFixed(2)}%` : ''}) · {s.paymentsMade} of {s.paymentsTotal} payments
         </div>
       </section>
 
@@ -104,7 +105,7 @@ export function Repay({ loan }: { loan: LoanCase }) {
                 Cancel request
               </button>
             </div>
-          ) : loan.pausesUsed < MAX_PAUSES ? (
+          ) : loan.pausesUsed < rules.maxPauses ? (
             <Button variant="secondary" onClick={() => run(() => api.requestPause(loan.id))}>
               Need flexibility? Ask to pause a month
             </Button>
@@ -128,7 +129,7 @@ export function Repay({ loan }: { loan: LoanCase }) {
         </div>
         <Progress value={loan.points / (REWARDS[REWARDS.length - 1]?.threshold ?? 1)} label="Family points" />
         <div className="fs-tiny fs-muted">
-          +{POINTS.HELP} per family member who helps · +{POINTS.ON_TIME} per on-time payment · +{POINTS.COMPLETE} when fully repaid. Offers
+          +{rules.points.help} per family member who helps · +{rules.points.onTime} per on-time payment · +{rules.points.complete} when fully repaid. Offers
           open at full repayment.
         </div>
         {REWARDS.map((r) => {

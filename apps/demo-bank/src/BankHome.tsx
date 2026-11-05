@@ -1,21 +1,15 @@
-import { formatMoney, isOpen, nextInstallment, formatDate } from '@familyshield/core';
-import type { MockState } from '@familyshield/sdk/mock';
-import type { LedgerEntry } from '@familyshield/sdk/mock';
+import { formatDate, formatMoney, isOpen, nextInstallment } from '@familyshield/core';
+import type { AccountSummary, LoanCase } from '@familyshield/core';
 
 const BASE_TRANSACTIONS = [
-  { name: 'Corner Grocery', meta: 'Groceries · Oct 30', amount: -8_624 },
-  { name: 'Westside Auto Shop', meta: 'Auto · Oct 28', amount: -32_000 },
-  { name: 'Payroll deposit', meta: 'Income · Oct 25', amount: 250_000 },
+  { id: 'base-1', name: 'Corner Grocery', meta: 'Groceries · Oct 30', amount: -8_624 },
+  { id: 'base-2', name: 'Westside Auto Shop', meta: 'Auto · Oct 28', amount: -32_000 },
+  { id: 'base-3', name: 'Payroll deposit', meta: 'Income · Oct 25', amount: 250_000 },
 ];
 
-/**
- * What the FamilyShield entry card says. A real bank would get this from the
- * FamilyShield API's summary endpoint; the demo reads the mock's state.
- */
-function entrySubtitle(state: MockState, userId: string): { text: string; badge?: string } {
-  const mine = state.loans.filter((l) => l.borrowerId === userId && l.status !== 'cancelled').at(-1);
-  const asked = state.loans.filter((l) => l.borrowerId !== userId && l.offers.some((o) => o.memberId === userId));
-  const needsMe = asked.filter((l) => {
+/** What the FamilyShield entry card says, from the FamilyShield API. */
+export function entrySubtitle(userId: string, myLoan: LoanCase | null, incoming: LoanCase[]): { text: string; badge?: string } {
+  const needsMe = incoming.filter((l) => {
     const offer = l.offers.find((o) => o.memberId === userId);
     const agreement = l.agreements.find((a) => a.lenderId === userId);
     return (
@@ -25,13 +19,13 @@ function entrySubtitle(state: MockState, userId: string): { text: string; badge?
     );
   });
   if (needsMe.length) return { text: `Your family needs you · ${needsMe.length} to review`, badge: String(needsMe.length) };
-  if (mine && isOpen(mine)) {
-    if (mine.status === 'collecting') return { text: 'Your request is collecting private offers' };
-    if (mine.status === 'signing') return { text: 'Waiting for everyone to sign' };
-    const next = nextInstallment(mine);
+  if (myLoan && isOpen(myLoan)) {
+    if (myLoan.status === 'collecting') return { text: 'Your request is collecting private offers' };
+    if (myLoan.status === 'signing') return { text: 'Waiting for everyone to sign' };
+    const next = nextInstallment(myLoan);
     return { text: next ? `Next family payment ${formatMoney(next.amount)} · ${formatDate(next.dueDate)}` : 'Repayment on track' };
   }
-  if (mine?.status === 'repaid') return { text: 'Fully repaid. Your family rewards are ready.' };
+  if (myLoan?.status === 'repaid') return { text: 'Fully repaid. Your family rewards are ready.' };
   return { text: 'Get help from trusted family during a life shock.', badge: 'NEW' };
 }
 
@@ -43,16 +37,14 @@ const Icon = ({ d }: { d: string }) => (
 
 export function BankHome(props: {
   firstName: string;
-  balance: number;
-  ledger: LedgerEntry[];
-  state: MockState;
-  userId: string;
+  accountLabel: string;
+  account: AccountSummary | null;
+  entry: { text: string; badge?: string };
   onOpenFamilyShield: () => void;
 }) {
-  const entry = entrySubtitle(props.state, props.userId);
   const transactions = [
-    ...props.ledger.map((e) => ({ id: e.id, name: e.memo, meta: `FamilyShield · ${formatDate(e.at.slice(0, 10), false)}`, amount: e.amount, fs: true })),
-    ...BASE_TRANSACTIONS.map((t) => ({ ...t, id: t.name, fs: false })),
+    ...(props.account?.transactions ?? []).map((t) => ({ id: t.id, name: t.memo, meta: `FamilyShield · ${formatDate(t.at.slice(0, 10), false)}`, amount: t.amount })),
+    ...BASE_TRANSACTIONS,
   ].slice(0, 6);
 
   return (
@@ -72,9 +64,9 @@ export function BankHome(props: {
         </header>
         <p className="greeting">Good afternoon, {props.firstName}</p>
 
-        <section className="balance" aria-label="Everyday Checking">
-          <div className="balance-label">Everyday Checking ••4821</div>
-          <div className="balance-amount">{formatMoney(props.balance)}</div>
+        <section className="balance" aria-label={props.accountLabel}>
+          <div className="balance-label">{props.accountLabel}</div>
+          <div className="balance-amount">{props.account ? formatMoney(props.account.balance) : '…'}</div>
           <div className="balance-label">Available balance</div>
         </section>
 
@@ -101,9 +93,9 @@ export function BankHome(props: {
           </span>
           <span className="fs-entry-text">
             <span className="fs-entry-title">
-              FamilyShield {entry.badge ? <span className="badge">{entry.badge}</span> : null}
+              FamilyShield {props.entry.badge ? <span className="badge">{props.entry.badge}</span> : null}
             </span>
-            <span className="fs-entry-sub">{entry.text}</span>
+            <span className="fs-entry-sub">{props.entry.text}</span>
           </span>
           <Icon d="M9 18l6-6-6-6" />
         </button>

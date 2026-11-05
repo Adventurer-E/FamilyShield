@@ -1,35 +1,47 @@
 import type { Cents } from './money';
 
 /**
- * Business rules from the FamilyShield deck. Kept in one place so a partner
- * bank (or a pilot) can tune them without touching the lifecycle code.
+ * The business rules. In the functional mockup they come from
+ * data/settings.csv, so they can be tuned without touching code; these
+ * defaults match the FamilyShield deck and are used when nothing else is given.
  */
+export interface Rules {
+  /** One-time service fee charged to the borrower, added to what they repay. */
+  feeRate: number;
+  /** Request limits, in cents. */
+  amountMin: Cents;
+  amountMax: Cents;
+  amountStep: Cents;
+  /** Repayment terms a borrower can choose, in months. */
+  terms: number[];
+  /** How many one-month pauses a borrower may ask for over a loan's life. */
+  maxPauses: number;
+  /** Family points. Points belong to the whole circle on a loan, not one person. */
+  points: {
+    /** Per family member who funds the loan, awarded when the loan goes live. */
+    help: number;
+    /** Per installment paid on or before its due date. */
+    onTime: number;
+    /** Bonus when the loan is fully repaid. */
+    complete: number;
+  };
+}
 
-/** One-time service fee charged to the borrower, added to what they repay. */
-export const FEE_RATE = 0.05;
+export const DEFAULT_RULES: Rules = {
+  feeRate: 0.05,
+  amountMin: 50_000, // $500
+  amountMax: 500_000, // $5,000
+  amountStep: 25_000, // $250
+  terms: [6, 10, 12],
+  maxPauses: 1,
+  points: { help: 100, onTime: 80, complete: 200 },
+};
 
-/** Request limits, in cents. */
-export const AMOUNT_MIN: Cents = 50_000; // $500
-export const AMOUNT_MAX: Cents = 500_000; // $5,000
-export const AMOUNT_STEP: Cents = 25_000; // $250
+export function feeFor(principal: Cents, rules: Rules = DEFAULT_RULES): Cents {
+  return Math.round(principal * rules.feeRate);
+}
 
-/** Repayment terms a borrower can choose, in months. */
-export const TERM_OPTIONS = [6, 10, 12] as const;
-export type TermMonths = (typeof TERM_OPTIONS)[number];
-
-/** How many one-month pauses a borrower may ask for over a loan's life. */
-export const MAX_PAUSES = 1;
-
-/** Family points. Points belong to the whole circle on a loan, not one person. */
-export const POINTS = {
-  /** Per family member who funds the loan, awarded when the loan goes live. */
-  HELP: 100,
-  /** Per installment paid on or before its due date. */
-  ON_TIME: 80,
-  /** Bonus when the loan is fully repaid. */
-  COMPLETE: 200,
-} as const;
-
-export function feeFor(principal: Cents): Cents {
-  return Math.round(principal * FEE_RATE);
+/** "5%" style label for UI copy. */
+export function feeLabel(rules: Rules = DEFAULT_RULES): string {
+  return `${+(rules.feeRate * 100).toFixed(2)}%`;
 }

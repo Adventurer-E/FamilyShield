@@ -8,7 +8,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./mock": "./src/api/mock/index.ts",
+    "./mockup": "./src/mockup/index.ts",
     "./embed": "./src/embed.tsx"
   },
   "scripts": {
@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@familyshield/core": "0.1.0",
+    "@familyshield/service": "0.1.0",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },

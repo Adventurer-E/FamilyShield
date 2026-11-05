@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AMOUNT_MAX, AMOUNT_MIN, AMOUNT_STEP, FEE_RATE, TERM_OPTIONS, estimateMonthly, feeFor, formatMoney } from '@familyshield/core';
+import { estimateMonthly, feeFor, feeLabel, formatMoney } from '@familyshield/core';
 import type { Reason } from '@familyshield/core';
 import { useFs } from '../context';
 import { Button, Notice, Screen } from '../kit';
@@ -13,11 +13,17 @@ const REASONS: Array<{ id: Reason; label: string; template: string }> = [
 
 export function Request() {
   const { api, run, go, emit, data } = useFs();
+  const { rules } = data.config;
+  const { amountMin: AMOUNT_MIN, amountMax: AMOUNT_MAX, amountStep: AMOUNT_STEP } = rules;
   const [reason, setReason] = useState<Reason>('car');
   const [purpose, setPurpose] = useState(REASONS[0]!.template);
   const [edited, setEdited] = useState(false);
-  const [amount, setAmount] = useState(150_000);
-  const [months, setMonths] = useState<number>(10);
+  // Start at $1,500 / 10 months when the rules allow it, else the nearest valid choice.
+  const [amount, setAmount] = useState(() => {
+    const clamped = Math.min(Math.max(150_000, AMOUNT_MIN), AMOUNT_MAX);
+    return AMOUNT_MIN + Math.round((clamped - AMOUNT_MIN) / AMOUNT_STEP) * AMOUNT_STEP;
+  });
+  const [months, setMonths] = useState<number>(() => (rules.terms.includes(10) ? 10 : rules.terms[0] ?? 6));
 
   const pickReason = (id: Reason) => {
     setReason(id);
@@ -82,12 +88,12 @@ export function Request() {
       <fieldset className="fs-stack" style={{ border: 'none', padding: 0, margin: 0 }}>
         <legend className="fs-h3" style={{ marginBottom: 10 }}>Preferred repayment</legend>
         <div role="radiogroup" aria-label="Preferred repayment" className="fs-stack" style={{ gap: 8 }}>
-          {TERM_OPTIONS.map((m) => (
+          {rules.terms.map((m) => (
             <button key={m} type="button" role="radio" aria-checked={months === m} className="fs-option" onClick={() => setMonths(m)}>
               <span className="fs-radio" />
               <span className="fs-grow" style={{ fontWeight: 700 }}>{m} months</span>
               <span className="fs-small" style={{ fontWeight: 700, color: '#3B4659' }}>
-                {formatMoney(estimateMonthly(amount, m, FEE_RATE))} / month
+                {formatMoney(estimateMonthly(amount, m, rules.feeRate))} / month
               </span>
             </button>
           ))}
@@ -96,8 +102,8 @@ export function Request() {
 
       <Notice>
         Only your trusted circle ({data.profile.circle.map((p) => p.nickname ?? p.firstName).join(', ')}) sees this. Each person answers
-        privately; nobody sees anyone else’s answer. A one-time {Math.round(FEE_RATE * 100)}% service fee (
-        {formatMoney(feeFor(amount))} if fully funded) is added to what you repay and spread across your monthly payments.
+        privately; nobody sees anyone else’s answer. A one-time {feeLabel(rules)} service fee (
+        {formatMoney(feeFor(amount, rules))} if fully funded) is added to what you repay and spread across your monthly payments.
       </Notice>
 
       <Button onClick={send}>Send to my trusted circle</Button>

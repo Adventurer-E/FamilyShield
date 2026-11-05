@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
         lib: {
           entry: {
             index: resolve(__dirname, 'src/index.ts'),
-            mock: resolve(__dirname, 'src/api/mock/index.ts'),
+            mockup: resolve(__dirname, 'src/mockup/index.ts'),
             embed: resolve(__dirname, 'src/embed.tsx'),
           },
           formats: ['es'],

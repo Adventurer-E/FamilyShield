@@ -119,7 +119,7 @@ export function LenderLoan({ loan }: { loan: LoanCase }) {
         <>
           <AgreementDoc agreement={ls.agreement} months={loan.months} borrowerId={loan.borrowerId} />
           <Notice kind="info">
-            The 5% service fee is paid by {who} to FamilyShield. You get back exactly the {formatMoney(ls.lent)} you lend.
+            The {+((ls.agreement.fee / ls.agreement.principal) * 100).toFixed(2)}% service fee is paid by {who} to FamilyShield. You get back exactly the {formatMoney(ls.lent)} you lend.
           </Notice>
           {ls.agreement.lenderSignedAt ? (
             <Notice kind="info">You’ve signed. The money moves once everyone has signed.</Notice>
