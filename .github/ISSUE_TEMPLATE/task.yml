@@ -15,41 +15,30 @@ body:
       placeholder: On the Repay screen, show the date of the last payment, so borrowers know their payment went through.
     validations:
       required: true
-  - type: textarea
-    id: done
-    attributes:
-      label: Done when
-      description: How will the reviewer know it's finished? A short checklist works well.
-      placeholder: |
-        - [ ] Repay screen shows "Last payment: Dec 5"
-        - [ ] Hidden before the first payment
-        - [ ] Test added
+
+  # TEAM LIST: when someone joins, add "- '@their-github-name'" to BOTH lists below.
+  # Keep "Nobody yet (decide later)" first.
   - type: dropdown
-    id: area
-    attributes:
-      label: Where in the app
-      description: Helps people find the right screen guide in the wiki.
-      multiple: true
-      options:
-        - Bank home / top bar
-        - FamilyShield hub
-        - Request
-        - Offers
-        - Agreement
-        - Repay & rewards
-        - Lender screens
-        - Data (CSV files)
-        - Back-end (rules, service, server)
-        - Docs / workflow / CI
-  - type: input
     id: assignee
     attributes:
       label: Assignee
-      description: Optional. Who will do the work? A GitHub @name, or leave empty. Anyone can assign or change it later (`/assign me`, `/reassign @name`).
-      placeholder: '@name'
-  - type: input
+      description: Who will do the work? Anyone can change it later (`/assign me`, `/reassign @name`).
+      options:
+        - Nobody yet (decide later)
+        - '@Adventurer-E'
+        - '@yj624-YichenJi'
+        - '@tft32-cs'
+        - '@Jason0192837465'
+      default: 0
+  - type: dropdown
     id: reviewer
     attributes:
       label: Reviewer
-      description: Who should review and merge it? A GitHub @name, ideally not the assignee. Leave empty to decide later with `/reviewer @name` or `/reviewer me`.
-      placeholder: '@name'
+      description: Who will review and merge it? In principle, not the assignee. Change it later with `/reviewer @name` or `/review`.
+      options:
+        - Nobody yet (decide later)
+        - '@Adventurer-E'
+        - '@yj624-YichenJi'
+        - '@tft32-cs'
+        - '@Jason0192837465'
+      default: 0

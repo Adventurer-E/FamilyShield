@@ -157,6 +157,7 @@ describe('helpers', () => {
   test('reviewer comes from the issue form, then from the bot block', () => {
     assert.deepEqual(t.parseMeta('### What\n\nStuff\n\n### Reviewer\n\n@ann\n\n### Notes\n\nx').reviewers, ['ann']);
     assert.deepEqual(t.parseMeta('### Reviewer\n\n_No response_\n').reviewers, []);
+    assert.deepEqual(t.parseMeta('### Reviewer\n\nNobody yet (decide later)\n').reviewers, [], 'the dropdown\'s "nobody" choice');
     const body = t.withMeta('text', { reviewers: [], branch: null }, 'https://x');
     assert.deepEqual(t.parseMeta(body), { reviewers: [], branch: null, hasBlock: true });
     const again = t.withMeta(body, { reviewers: ['ann', 'bo'], branch: 'ticket/1-x' }, 'https://x');
@@ -237,7 +238,7 @@ describe('a ticket from icebox to done', () => {
   test('changes requested sends it back to in progress; new commits after approval need a new review', async () => {
     const gh = fakeGitHub();
     const bot = new t.TicketBot({ github: gh.github, context, core: silentCore() });
-    gh.openIssue({ title: 'Fix typo', body: '### Reviewer\n\nann' });
+    gh.openIssue({ title: 'Fix typo', body: '### Reviewer\n\n@ann' });
     await bot.onIssueOpened(await bot.getIssue(1));
     await bot.onIssueComment(await bot.getIssue(1), '/start', 'bob');
     const pr = gh.openPull({ head: 'ticket/1-fix-typo', by: 'bob' });
@@ -469,6 +470,7 @@ describe('assignees (who created the ticket doesn’t matter)', () => {
   test('a ticket can be created assigned (form field) or unassigned', async () => {
     assert.deepEqual(assignees((await open('### Assignee\n\n@bo\n\n### Reviewer\n\n@ann')).gh), ['bo']);
     assert.deepEqual(assignees((await open('### Assignee\n\n_No response_\n\n### Reviewer\n\n@ann')).gh), []);
+    assert.deepEqual(assignees((await open('### Assignee\n\nNobody yet (decide later)\n\n### Reviewer\n\n@ann')).gh), []);
   });
 
   test('anyone can assign, self-assign, reassign and unassign', async () => {
