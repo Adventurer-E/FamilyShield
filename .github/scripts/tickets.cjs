@@ -110,11 +110,14 @@ function parseMeta(body) {
   return { reviewers: parseFormField(text, 'Reviewer'), branch: null, hasBlock: false };
 }
 
-/** The users named in an issue-form answer ("### Assignee\n\n@ann"), or [] for "_No response_". */
+/**
+ * The users chosen in an issue-form answer ("### Assignee\n\n@ann"). Only @names count,
+ * so "Nobody yet (decide later)" and "_No response_" give [].
+ */
 function parseFormField(body, label) {
   const m = new RegExp(`###\\s*${label}[^\\n]*\\n+([^\\n#]*)`, 'i').exec(String(body || ''));
-  const answer = m ? m[1].trim() : '';
-  return answer && !/^_?no response_?$/i.test(answer) ? parseUsers(answer, '') : [];
+  const answer = m ? m[1] : '';
+  return [...new Set([...answer.matchAll(/@([a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38})/gi)].map((x) => x[1]))];
 }
 
 function renderMeta(meta, repoUrl) {
