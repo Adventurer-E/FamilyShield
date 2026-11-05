@@ -1,0 +1,26 @@
+{
+  "name": "@familyshield/demo-bank",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BlueRiver Bank: a fictional host banking app that embeds the FamilyShield module.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@familyshield/core": "0.1.0",
+    "@familyshield/sdk": "0.1.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "4.3.4",
+    "typescript": "5.6.3",
+    "vite": "5.4.11"
+  }
+}
