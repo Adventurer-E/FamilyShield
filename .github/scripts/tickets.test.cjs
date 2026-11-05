@@ -14,7 +14,10 @@ function fakeGitHub() {
     pulls: {}, // number → pull
     reviews: {}, // pull number → [{ user, state }]
     refs: { 'heads/main': 'sha-main' },
-    comments: [], // { number, body }
+    comments: [], // { number, body, user }
+    admins: [], // logins with admin permission
+    prCommits: {}, // commit sha → [pull requests]
+    reruns: [],
     requested: [], // { pull, reviewers }
     next: 1,
   };
@@ -24,7 +27,13 @@ function fakeGitHub() {
   const rest = {
     issues: {
       get: async ({ issue_number }) => ok(structuredClone(issue(issue_number))),
-      createComment: async ({ issue_number, body }) => { state.comments.push({ number: issue_number, body }); return ok({}); },
+      createComment: async ({ issue_number, body }) => { state.comments.push({ number: issue_number, body, user: { login: 'github-actions[bot]' } }); return ok({}); },
+      listComments: async ({ issue_number }) => ok(state.comments.filter((c) => c.number === issue_number)),
+      create: async ({ title, body, labels, assignees }) => {
+        const n = state.next++;
+        state.issues[n] = { number: n, node_id: `I_${n}`, title, body, labels: labels.map((name) => ({ name })), assignees: assignees.map((login) => ({ login })), state: 'open' };
+        return ok(state.issues[n]);
+      },
       update: async ({ issue_number, body }) => { issue(issue_number).body = body; return ok({}); },
       addLabels: async ({ issue_number, labels }) => {
         const i = issue(issue_number);
@@ -55,9 +64,18 @@ function fakeGitHub() {
       getRef: async ({ ref }) => (state.refs[ref] ? ok({ object: { sha: state.refs[ref] } }) : Promise.reject(notFound())),
       createRef: async ({ ref, sha }) => { state.refs[ref.replace(/^refs\//, '')] = sha; return ok({}); },
     },
-    repos: { get: async () => ok({ default_branch: 'main', node_id: 'R_1' }) },
+    repos: {
+      get: async () => ok({ default_branch: 'main', node_id: 'R_1' }),
+      getCollaboratorPermissionLevel: async ({ username }) => ok({ permission: state.admins.includes(username) ? 'admin' : 'write' }),
+      listPullRequestsAssociatedWithCommit: async ({ commit_sha }) => ok(state.prCommits[commit_sha] || []),
+    },
+    actions: {
+      listWorkflowRuns: async () => ok({ workflow_runs: [{ id: 77 }] }),
+      reRunWorkflow: async ({ run_id }) => { state.reruns.push(run_id); return ok({}); },
+    },
     pulls: {
       list: async () => ok(Object.values(state.pulls).filter((p) => p.state === 'open')),
+      get: async ({ pull_number }) => ok(structuredClone(state.pulls[pull_number])),
       update: async ({ pull_number, body }) => { state.pulls[pull_number].body = body; return ok({}); },
       requestReviewers: async ({ pull_number, reviewers }) => { state.requested.push({ pull: pull_number, reviewers }); return ok({}); },
       listReviews: async ({ pull_number }) => ok(state.reviews[pull_number] || []),
@@ -79,7 +97,7 @@ function fakeGitHub() {
     },
     openPull({ head, body = '', by, draft = false }) {
       const n = state.next++;
-      state.pulls[n] = { number: n, head: { ref: head }, body, user: { login: by }, draft, state: 'open', merged: false };
+      state.pulls[n] = { number: n, head: { ref: head, sha: `sha-${n}` }, body, user: { login: by }, draft, state: 'open', merged: false };
       state.issues[n] = { number: n, node_id: `PR_${n}`, title: 'pr', body, labels: [], assignees: [], state: 'open', pull_request: {} };
       return state.pulls[n];
     },
@@ -88,6 +106,9 @@ function fakeGitHub() {
     },
     status: (n) => t.statusOfLabels(state.issues[n].labels)?.key,
     commentsOn: (n) => state.comments.filter((c) => c.number === n).map((c) => c.body),
+    say(n, login, body) {
+      state.comments.push({ number: n, body, user: { login } });
+    },
   };
   return { github, state, ...helpers };
 }
@@ -155,6 +176,12 @@ describe('helpers', () => {
       { user: { login: 'ann' }, state: 'APPROVED' },
     ]);
     assert.deepEqual(latest, { ann: 'APPROVED' });
+  });
+
+  test('approvals on an older commit no longer count', () => {
+    const reviews = [{ user: { login: 'ann' }, state: 'APPROVED', commit_id: 'old' }, { user: { login: 'bo' }, state: 'CHANGES_REQUESTED', commit_id: 'old' }];
+    assert.deepEqual(t.latestReviews(reviews, 'new'), { ann: 'STALE_APPROVAL', bo: 'CHANGES_REQUESTED' });
+    assert.deepEqual(t.latestReviews(reviews, 'old'), { ann: 'APPROVED', bo: 'CHANGES_REQUESTED' });
   });
 });
 
@@ -289,7 +316,7 @@ describe('commands', () => {
     const { gh, say } = await setup();
     await say('/start', 'bob');
     await say('/reviewer me', 'bob');
-    assert.ok(gh.commentsOn(1).some((c) => /also assigned/.test(c)));
+    assert.ok(gh.commentsOn(1).some((c) => /both author and reviewer/.test(c) && /In principle/.test(c) && /administrator/.test(c)));
   });
 
   test('status by hand, and helpful errors', async () => {
@@ -354,5 +381,77 @@ describe('board', () => {
     await bot.syncBoard();
     assert.equal(gh.status(1), 'in-progress');
     assert.ok(gh.state.refs['heads/ticket/1-dragged'], 'dragging to In progress creates the branch too');
+  });
+});
+
+// ------------------------------------------------------------------ rules "in principle"
+
+describe('rule exceptions', () => {
+  async function selfReviewed({ admins = [] } = {}) {
+    const gh = fakeGitHub();
+    gh.state.admins.push(...admins);
+    const bot = new t.TicketBot({ github: gh.github, context, core: silentCore() });
+    gh.openIssue({ title: 'Hotfix', body: '### Reviewer\n\n@bob' }); // bob reviews his own ticket
+    await bot.onIssueOpened(await bot.getIssue(1));
+    await bot.onIssueComment(await bot.getIssue(1), '/start', 'bob');
+    const pr = gh.openPull({ head: 'ticket/1-hotfix', by: 'bob' });
+    await bot.onPullRequest(pr, 'opened');
+    return { gh, bot, pr };
+  }
+  const prIssue = (gh, pr) => gh.state.issues[pr.number];
+
+  test('author-reviewers are told the rule, and the gate waits', async () => {
+    const { gh, bot, pr } = await selfReviewed();
+    assert.ok(gh.commentsOn(pr.number).some((c) => /In principle, a ticket’s reviewer is not its author/.test(c) && /\/self-approve/.test(c)));
+    assert.equal((await bot.reviewGate(gh.state.pulls[pr.number])).ok, false);
+  });
+
+  test('/self-approve with a reason records the exception and opens the gate', async () => {
+    const { gh, bot, pr } = await selfReviewed();
+    gh.say(pr.number, 'bob', '/self-approve Production is down and Ann is on a flight');
+    await bot.onIssueComment(prIssue(gh, pr), '/self-approve Production is down and Ann is on a flight', 'bob');
+    assert.ok(prIssue(gh, pr).labels.some((l) => l.name === 'rule exception'));
+    assert.equal(gh.status(1), 'reviewed');
+    assert.deepEqual(gh.state.reruns, [77], 'the Review gate is re-run');
+    assert.ok(gh.commentsOn(pr.number).some((c) => /Rule exception recorded/.test(c)));
+    assert.deepEqual(await bot.reviewGate(gh.state.pulls[pr.number]), { ok: true, message: 'Rule exception recorded by @bob: Production is down and Ann is on a flight' });
+  });
+
+  test('a reason is required, and others cannot self-approve', async () => {
+    const { gh, bot, pr } = await selfReviewed();
+    await bot.onIssueComment(prIssue(gh, pr), '/self-approve', 'bob');
+    assert.ok(gh.commentsOn(pr.number).some((c) => /give the reason/.test(c)));
+    gh.say(pr.number, 'carl', '/self-approve I think it is fine honestly');
+    await bot.onIssueComment(prIssue(gh, pr), '/self-approve I think it is fine honestly', 'carl');
+    assert.ok(gh.commentsOn(pr.number).some((c) => /only for the ticket’s reviewer when they are also the author, or for a repository administrator/.test(c)));
+    assert.equal((await bot.reviewGate(gh.state.pulls[pr.number])).ok, false, "carl's comment doesn't count");
+  });
+
+  test('administrators may record an exception', async () => {
+    const { gh, bot, pr } = await selfReviewed({ admins: ['eric'] });
+    gh.say(pr.number, 'eric', '/self-approve Demo for the bank in an hour');
+    await bot.onIssueComment(prIssue(gh, pr), '/self-approve Demo for the bank in an hour', 'eric');
+    assert.match((await bot.reviewGate(gh.state.pulls[pr.number])).message, /@eric: Demo for the bank/);
+  });
+
+  test('direct pushes to main are recorded, not blocked; merges are not', async () => {
+    const gh = fakeGitHub();
+    gh.state.admins.push('eric');
+    gh.state.prCommits['merged1'] = [{ number: 5, merged_at: '2026-11-05T00:00:00Z' }];
+    const bot = new t.TicketBot({ github: gh.github, context, core: silentCore() });
+    await bot.onPushToMain({ pusher: { name: 'ann' }, commits: [{ id: 'merged1', message: 'Merge pull request #5' }] });
+    assert.equal(Object.keys(gh.state.issues).length, 0, 'a merged pull request is not an exception');
+
+    await bot.onPushToMain({ pusher: { name: 'eric' }, commits: [{ id: 'abc1234567', message: 'Fix typo on home\n\nlong text' }] });
+    const record = Object.values(gh.state.issues)[0];
+    assert.match(record.title, /Direct push to main by @eric/);
+    assert.deepEqual(record.labels, [{ name: 'rule exception' }]);
+    assert.deepEqual(record.assignees, [{ login: 'eric' }]);
+    assert.match(record.body, /as a repository administrator/);
+    assert.match(record.body, /In principle, every change reaches `main` through a ticket branch/);
+    assert.match(record.body, /`abc1234`.* Fix typo on home/);
+
+    await bot.onPushToMain({ pusher: { name: 'github-actions[bot]' }, commits: [{ id: 'x', message: 'bot' }] });
+    assert.equal(Object.keys(gh.state.issues).length, 1, 'bot pushes are ignored');
   });
 });

@@ -1,0 +1,77 @@
+name: Wiki sync (AI)
+
+# After a pull request is merged into main, Claude reads what changed and updates
+# the wiki pages it affects (only those), then comments on the pull request with
+# links to each updated page. Logic and tests: .github/scripts/wiki-ai.cjs
+#
+# Needs the ANTHROPIC_API_KEY repository secret. Optional variable WIKI_AI_MODEL
+# (default claude-sonnet-5-5). Add the `skip-wiki` label to a PR to skip it.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to (re)run the wiki update for
+        required: true
+
+permissions:
+  contents: write # push to the wiki
+  pull-requests: write # comment on the pull request
+
+concurrency:
+  group: wiki-sync # one wiki update at a time, in merge order
+  cancel-in-progress: false
+
+jobs:
+  wiki:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          sparse-checkout: .github/scripts
+
+      - name: Get the wiki
+        run: git clone "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" wiki
+
+      - name: Ask Claude which pages to update
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          WIKI_AI_MODEL: ${{ vars.WIKI_AI_MODEL }}
+        run: node .github/scripts/wiki-ai.cjs "$PR_NUMBER" wiki result.json
+
+      - name: Save to the wiki
+        id: save
+        run: |
+          cd wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "No wiki changes"; exit 0; fi
+          TITLE=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json title --jq .title)
+          git commit -m "Update for #${PR_NUMBER}: ${TITLE}" -m "Automatic AI update after merging ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/pull/${PR_NUMBER}"
+          git pull --rebase --quiet
+          git push
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Comment on the pull request
+        if: always()
+        env:
+          WIKI_COMMIT: ${{ steps.save.outputs.commit }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const { renderComment } = require("./.github/scripts/wiki-ai.cjs");
+            const result = fs.existsSync("result.json") ? JSON.parse(fs.readFileSync("result.json", "utf8"))
+              : { status: "error", summary: "the job stopped before the AI step finished", changes: [] };
+            fs.writeFileSync("comment.md", renderComment(result, { repo: process.env.GITHUB_REPOSITORY, wikiCommit: process.env.WIKI_COMMIT }));
+          '
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file comment.md

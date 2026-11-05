@@ -2,7 +2,8 @@ name: Tickets
 
 # Runs the Kanban workflow (see the wiki page Team-workflow):
 #   ticket commands (/start, /reviewer …), status labels + board column,
-#   a branch per ticket, review requests, and the merge-by-reviewer reminder.
+#   a branch per ticket, review requests, the merge-by-reviewer reminder,
+#   /self-approve exceptions on pull requests, and a record of direct pushes to main.
 # Logic and tests: .github/scripts/tickets.cjs, tickets.test.cjs
 
 on:
@@ -14,6 +15,8 @@ on:
     types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, edited, closed]
   pull_request_review:
     types: [submitted]
+  push:
+    branches: [main] # direct pushes are recorded as rule exceptions
   schedule:
     - cron: '*/10 * * * *' # pick up cards dragged on the board
   workflow_dispatch:
@@ -22,6 +25,7 @@ permissions:
   contents: write # create ticket branches
   issues: write # labels, comments, assignees
   pull-requests: write # request reviewers, link tickets
+  actions: write # re-run the Review gate after /self-approve
 
 concurrency:
   group: tickets-${{ github.event.issue.number || github.event.pull_request.number || 'board' }}

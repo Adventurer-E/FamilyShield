@@ -24,7 +24,16 @@ const STATUSES = [
 const EXTRA_LABELS = [
   { name: 'needs reviewer', color: 'e99695', description: 'Nobody is set to review this ticket yet' },
   { name: 'merge rule broken', color: 'b60205', description: 'Merged by someone other than the ticket reviewer' },
+  { name: 'rule exception', color: 'ff7619', description: 'A team rule was set aside (emergency or administrator), with a recorded reason' },
 ];
+
+/** The two "in principle" rules, worded once so every message says the same thing. */
+const RULES = {
+  selfReview:
+    'In principle, a ticket’s reviewer is not its author. Only in an emergency or other extenuating circumstances, or as a repository administrator, may the author review their own work, using `/self-approve <reason>` on the pull request.',
+  directPush:
+    'In principle, every change reaches `main` through a ticket branch and a reviewed pull request. Only in an emergency or other extenuating circumstances, or as a repository administrator, may someone push to `main` directly.',
+};
 
 const norm = (s) => String(s || '').toLowerCase().replace(/[\s_-]+/g, ' ').trim();
 const byKey = (key) => STATUSES.find((s) => s.key === key);
@@ -129,12 +138,17 @@ function linkedIssueNumbers(pr) {
   return [...nums];
 }
 
-/** Latest review state per user (APPROVED / CHANGES_REQUESTED / …), ignoring plain comments. */
-function latestReviews(reviews) {
+/**
+ * Latest review state per user (APPROVED / CHANGES_REQUESTED / …), ignoring plain comments.
+ * With `headSha`, an approval only counts if it was given on that exact commit, so pushing new
+ * commits after an approval needs a fresh look. Requested changes keep blocking until re-reviewed.
+ */
+function latestReviews(reviews, headSha) {
   const latest = {};
   for (const r of reviews) {
     if (!r.user || r.state === 'COMMENTED' || r.state === 'PENDING') continue;
-    latest[r.user.login.toLowerCase()] = r.state;
+    const stale = headSha && r.commit_id && r.commit_id !== headSha;
+    latest[r.user.login.toLowerCase()] = stale && r.state === 'APPROVED' ? 'STALE_APPROVAL' : r.state;
   }
   return latest;
 }
@@ -151,6 +165,8 @@ const HELP = [
   '| `/reviewer remove @name` · `/reviewer clear` | Remove one or all reviewers |',
   '| `/status icebox` · `in progress` · `under review` · `reviewed` | Set the status by hand (you can also drag the card on the board) |',
   '| `/help` | Show this list |',
+  '',
+  'On a **pull request**, `/self-approve <reason>` records a rule exception when the author must review their own work (emergencies, or administrators).',
   '',
   'Status moves on its own, too: opening a pull request → **Under review** (reviewers are notified), approval → **Reviewed**, merge → **Done**.',
 ].join('\n');
@@ -307,7 +323,10 @@ class TicketBot {
         await this.github.rest.pulls.requestReviewers({ ...this.repo, pull_number: pr.number, reviewers }).catch((e) => this.core.warning(`requestReviewers: ${e.message}`));
       }
       if (reviewers.length < meta.reviewers.length) {
-        await this.comment(pr.number, `⚠️ @${pr.user.login} is listed as a reviewer of #${issue.number} but also wrote this pull request. GitHub doesn't let authors approve their own work; please add another reviewer on the ticket.`);
+        await this.comment(
+          pr.number,
+          `⚠️ @${pr.user.login} wrote this pull request and is also a reviewer of #${issue.number}. ${RULES.selfReview} Otherwise, please add another reviewer on the ticket (\`/reviewer @name\`).`,
+        );
       }
     }
     if (!quiet) {
@@ -333,8 +352,68 @@ class TicketBot {
     await this.setStatus(issue, status.key, { actor });
   }
 
+  async isAdmin(login) {
+    try {
+      const { data } = await this.github.rest.repos.getCollaboratorPermissionLevel({ ...this.repo, username: login });
+      return data.permission === 'admin';
+    } catch {
+      return false;
+    }
+  }
+
+  /** May this person record a self-approval exception on this pull request? */
+  async canSelfApprove(login, pr, issues) {
+    if (await this.isAdmin(login)) return { ok: true, as: 'administrator' };
+    const isAuthor = pr.user.login.toLowerCase() === login.toLowerCase();
+    const isReviewer = issues.length > 0 && issues.every((i) => parseMeta(i.body).reviewers.some((r) => r.toLowerCase() === login.toLowerCase()));
+    if (isAuthor && isReviewer) return { ok: true, as: 'author and reviewer' };
+    return { ok: false };
+  }
+
+  /** Comments on a pull request: only /self-approve is understood there. */
+  async onPullRequestComment(prNumber, commentBody, actor) {
+    const commands = parseCommands(commentBody).filter((c) => c.name === 'self-approve' || c.name === 'exception');
+    if (!commands.length) return;
+    const reason = commands[0].args.trim();
+    const pr = (await this.github.rest.pulls.get({ ...this.repo, pull_number: prNumber })).data;
+    const issues = await this.issuesFor(pr);
+    if (!issues.length) return this.comment(prNumber, '⚠️ `/self-approve` needs the pull request to be linked to a ticket first (`Closes #<number>`).');
+    if (reason.length < 10) return this.comment(prNumber, `⚠️ Please give the reason, e.g. \`/self-approve Production fix while the reviewer is away\`.\n\n${RULES.selfReview}`);
+    const who = await this.canSelfApprove(actor, pr, issues);
+    if (!who.ok) {
+      return this.comment(prNumber, `⚠️ @${actor}, \`/self-approve\` is only for the ticket’s reviewer when they are also the author, or for a repository administrator. ${RULES.selfReview}`);
+    }
+    await this.github.rest.issues.addLabels({ ...this.repo, issue_number: prNumber, labels: ['rule exception'] });
+    for (const issue of issues) await this.setStatus(issue, 'reviewed', { quiet: true });
+    await this.comment(prNumber, `🟠 **Rule exception recorded** by @${actor} (${who.as}): “${reason}”\n\n${RULES.selfReview} This exception is kept on the pull request and its \`rule exception\` label. The Review gate will now pass.`);
+    await this.rerunReviewGate(pr);
+  }
+
+  /** Re-run the latest Review gate check for the pull request's current commit. */
+  async rerunReviewGate(pr) {
+    try {
+      const { data } = await this.github.rest.actions.listWorkflowRuns({ ...this.repo, workflow_id: 'review-gate.yml', head_sha: pr.head.sha, per_page: 1 });
+      const run = data.workflow_runs && data.workflow_runs[0];
+      if (run) await this.github.rest.actions.reRunWorkflow({ ...this.repo, run_id: run.id });
+    } catch (e) {
+      this.core.warning(`Couldn't re-run the Review gate (${e.message}); it updates on the next push or review.`);
+    }
+  }
+
+  /** Every self-approval exception on a pull request that came from someone allowed to make it. */
+  async validExceptions(pr, issues) {
+    const comments = await this.github.paginate(this.github.rest.issues.listComments, { ...this.repo, issue_number: pr.number, per_page: 100 });
+    const out = [];
+    for (const c of comments) {
+      const cmd = parseCommands(c.body).find((x) => x.name === 'self-approve' || x.name === 'exception');
+      if (!cmd || cmd.args.trim().length < 10 || !c.user || /\[bot\]$/.test(c.user.login)) continue;
+      if ((await this.canSelfApprove(c.user.login, pr, issues)).ok) out.push({ by: c.user.login, reason: cmd.args.trim() });
+    }
+    return out;
+  }
+
   async onIssueComment(issue, commentBody, actor) {
-    if (issue.pull_request) return; // commands live on tickets, not pull requests
+    if (issue.pull_request) return this.onPullRequestComment(issue.number, commentBody, actor);
     const commands = parseCommands(commentBody);
     if (!commands.length) return;
     const replies = [];
@@ -369,7 +448,7 @@ class TicketBot {
         replies.push(reviewers.length ? `✅ Reviewer(s): ${reviewers.map((r) => `@${r}`).join(' ')}` : '✅ No reviewers now.');
         const assignees = (issue.assignees || []).map((a) => a.login.toLowerCase());
         const both = reviewers.filter((r) => assignees.includes(r.toLowerCase()));
-        if (both.length) replies.push(`⚠️ ${both.map((r) => `@${r}`).join(' ')} is also assigned. Authors can't approve their own pull request, so pick a different reviewer.`);
+        if (both.length) replies.push(`⚠️ ${both.map((r) => `@${r}`).join(' ')} is both author and reviewer. ${RULES.selfReview}`);
         // Already under review? Ask the new reviewers right away.
         if (statusOfLabels(issue.labels)?.key === 'under-review') await this.onUnderReview(issue, { quiet: true });
       } else if (name === 'status') {
@@ -460,19 +539,57 @@ class TicketBot {
     }
   }
 
+  /** A push to main that didn't come from a merged pull request is recorded as a rule exception. */
+  async onPushToMain(push) {
+    const pusher = (push.pusher && push.pusher.name) || (push.sender && push.sender.login) || 'unknown';
+    if (/\[bot\]$/.test(pusher) || pusher === 'github-actions') return;
+    const commits = (push.commits || []).filter((c) => c.distinct !== false);
+    const direct = [];
+    for (const c of commits) {
+      const { data } = await this.github.rest.repos.listPullRequestsAssociatedWithCommit({ ...this.repo, commit_sha: c.id });
+      if (!data.some((pr) => pr.merged_at)) direct.push(c);
+    }
+    if (!direct.length) return;
+    const admin = await this.isAdmin(pusher);
+    const list = direct.map((c) => `- [\`${c.id.slice(0, 7)}\`](${this.repoUrl}/commit/${c.id}) ${String(c.message).split('\n')[0]}`).join('\n');
+    const { data: issue } = await this.github.rest.issues.create({
+      ...this.repo,
+      title: `Direct push to main by @${pusher} (${direct.length} commit${direct.length === 1 ? '' : 's'})`,
+      labels: ['rule exception'],
+      assignees: [pusher].filter((p) => p !== 'unknown'),
+      body: [
+        `🟠 **Rule exception recorded.** @${pusher} pushed to \`main\` without a pull request${admin ? ' (as a repository administrator)' : ''}:`,
+        '',
+        list,
+        '',
+        RULES.directPush,
+        '',
+        `@${pusher}: please reply with the reason (for example, the emergency it fixed), then close this issue. If it wasn’t intended, revert the commit through a ticket and pull request.`,
+      ].join('\n'),
+    });
+    this.log(`recorded direct push as #${issue.number}`);
+  }
+
   /** The "Review gate" check: green only when a reviewer named on the ticket approved. */
   async reviewGate(pr) {
     const issues = await this.issuesFor(pr);
     if (!issues.length) return { ok: false, message: 'Not linked to a ticket. Add "Closes #<number>" to the pull request description.' };
     const reviews = await this.github.paginate(this.github.rest.pulls.listReviews, { ...this.repo, pull_number: pr.number, per_page: 100 });
-    const latest = latestReviews(reviews);
+    const latest = latestReviews(reviews, pr.head && pr.head.sha);
+    let exceptions = null; // looked up only when needed
     for (const issue of issues) {
       const reviewers = parseMeta(issue.body).reviewers.map((r) => r.toLowerCase());
-      if (!reviewers.length) return { ok: false, message: `Ticket #${issue.number} has no reviewer. Comment "/reviewer @name" on it.` };
-      const approvedBy = reviewers.filter((r) => latest[r] === 'APPROVED');
       const blocking = reviewers.filter((r) => latest[r] === 'CHANGES_REQUESTED');
       if (blocking.length) return { ok: false, message: `Changes requested by ${blocking.map((r) => '@' + r).join(', ')}.` };
-      if (!approvedBy.length) return { ok: false, message: `Waiting for approval from the reviewer of #${issue.number}: ${reviewers.map((r) => '@' + r).join(', ')}.` };
+      if (reviewers.some((r) => latest[r] === 'APPROVED')) continue;
+      exceptions ??= await this.validExceptions(pr, issues);
+      if (exceptions.length) continue;
+      if (!reviewers.length) return { ok: false, message: `Ticket #${issue.number} has no reviewer. Comment "/reviewer @name" on it.` };
+      return { ok: false, message: `Waiting for approval from the reviewer of #${issue.number}: ${reviewers.map((r) => '@' + r).join(', ')}.` };
+    }
+    if (exceptions && exceptions.length) {
+      const e = exceptions[exceptions.length - 1];
+      return { ok: true, message: `Rule exception recorded by @${e.by}: ${e.reason}` };
     }
     return { ok: true, message: 'Approved by the ticket reviewer.' };
   }
@@ -502,6 +619,7 @@ class TicketBot {
     const open = await this.github.paginate(this.github.rest.issues.listForRepo, { ...this.repo, state: 'open', per_page: 100 });
     for (const issue of open) {
       if (issue.pull_request || onBoard.has(issue.number)) continue;
+      if ((issue.labels || []).some((l) => (l.name || l) === 'rule exception')) continue; // records, not tickets
       await this.board.add(issue.node_id);
       await this.board.setStatus(issue.node_id, (statusOfLabels(issue.labels) || byKey('icebox')).board);
       if (!statusOfLabels(issue.labels)) await this.setStatus(issue, 'icebox', { quiet: true });
@@ -647,6 +765,9 @@ async function main(args) {
       return;
     case 'pull_request':
       return bot.onPullRequest(p.pull_request, p.action);
+    case 'push':
+      if (context.ref === 'refs/heads/main') return bot.onPushToMain(p);
+      return;
     case 'pull_request_review':
       if (p.action === 'submitted') return bot.onReview(p.pull_request, p.review);
       return;
@@ -670,6 +791,7 @@ async function reviewGate(args) {
 
 module.exports = {
   main,
+  RULES,
   reviewGate,
   TicketBot,
   Board,
