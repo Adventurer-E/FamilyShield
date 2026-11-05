@@ -1,0 +1,55 @@
+name: Task
+description: A piece of work for the board (feature, change, bug, docs…)
+labels: ['status: icebox']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        New tickets start in **Icebox**. When someone picks it up, they comment `/start` (or drag the card to **In progress**), and a branch is created.
+        Not sure what to write? See [How we work as a team](https://github.com/Adventurer-E/FamilyShield/wiki/Team-workflow).
+  - type: textarea
+    id: what
+    attributes:
+      label: What and why
+      description: What should change, and why does it matter? Plain words are fine.
+      placeholder: On the Repay screen, show the date of the last payment, so borrowers know their payment went through.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: How will the reviewer know it's finished? A short checklist works well.
+      placeholder: |
+        - [ ] Repay screen shows "Last payment: Dec 5"
+        - [ ] Hidden before the first payment
+        - [ ] Test added
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where in the app
+      description: Helps people find the right screen guide in the wiki.
+      multiple: true
+      options:
+        - Bank home / top bar
+        - FamilyShield hub
+        - Request
+        - Offers
+        - Agreement
+        - Repay & rewards
+        - Lender screens
+        - Data (CSV files)
+        - Back-end (rules, service, server)
+        - Docs / workflow / CI
+  - type: input
+    id: assignee
+    attributes:
+      label: Assignee
+      description: Optional. Who will do the work? A GitHub @name, or leave empty. Anyone can assign or change it later (`/assign me`, `/reassign @name`).
+      placeholder: '@name'
+  - type: input
+    id: reviewer
+    attributes:
+      label: Reviewer
+      description: Who should review and merge it? A GitHub @name, ideally not the assignee. Leave empty to decide later with `/reviewer @name` or `/reviewer me`.
+      placeholder: '@name'

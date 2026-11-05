@@ -69,165 +69,67 @@ bank’s existing app, so:
 
 ## Part 2 · For developers
 
-### Quick start
+**New here? Start with the [developer guide in the wiki](https://github.com/Adventurer-E/FamilyShield/wiki).** It assumes
+no web-development experience and walks through everything below in more detail.
 
-You need Node.js 20 or newer.
+### Run it
+
+You need [Node.js 20+](https://nodejs.org) and [Git](https://git-scm.com).
 
 ```bash
+git clone https://github.com/Adventurer-E/FamilyShield.git
+cd FamilyShield
 npm install
-npm run dev
+npm run dev        # then open http://localhost:5173
 ```
 
-This starts two things:
+### Where to go next
 
-- the **backend server** on http://localhost:8787, which reads and writes the CSV files in [`data/`](data/README.md)
-- the **BlueRiver functional mockup** on http://localhost:5173, which is the page to open
-
-Then follow the story on the right side of the page:
-
-1. As **Alex**, tap the FamilyShield card and send a request.
-2. Cousin Maya and Aunt Lisa answer automatically within a few seconds.
-3. Switch **Viewing as** to **Grace Chen** (Mom). Her bank shows Alex’s request; offer privately.
-4. Back as Alex, accept the offers and sign. Maya signs automatically; switch to Mom to sign hers.
-5. Make payments (or use the functional mockup shortcut), ask for a pause, and claim a partner reward.
-
-Use **Embed as: Inline SDK / WebView** to switch integration styles.
-**Reset functional mockup** clears all activity from the CSV files.
-
-### The data: CSV files instead of a database
-
-There is no real database. Everything lives in editable CSV files in
-[`data/`](data/README.md):
-
-| Setup (you edit) | Activity (the app writes, you can edit) |
+| I want to… | Read |
 | --- | --- |
-| `settings.csv`: fee %, request limits, terms, points, pauses | `loans.csv`, `offers.csv`, `agreements.csv` |
-| `people.csv`: customers and opening balances | `installments.csv`, `installment_splits.csv` |
-| `circles.csv`: who is in whose trusted circle | `points_log.csv`, `pauses.csv`, `pause_answers.csv` |
-| `rewards.csv`: partner offers and point thresholds | `claimed_rewards.csv` |
-| `auto_replies.csv`: relatives the mockup plays automatically | `transactions.csv`: every bank posting |
+| Set up my computer step by step | [Setup](https://github.com/Adventurer-E/FamilyShield/wiki/Setup) |
+| Understand what all the folders are | [The big picture](https://github.com/Adventurer-E/FamilyShield/wiki/The-big-picture) |
+| Change something I see on screen | [Find and change anything](https://github.com/Adventurer-E/FamilyShield/wiki/Find-and-change-anything), then the page for that screen in [**Screen by screen**](https://github.com/Adventurer-E/FamilyShield/wiki/Screen-by-screen) |
+| Change a number (balance, fee, reward) | [`data/README.md`](data/README.md). It's a CSV file, not code |
+| Understand the back-end and the CSV data | [The data and the back-end](https://github.com/Adventurer-E/FamilyShield/wiki/Data-and-back-end) |
+| Follow a recipe for a common change | [Recipes](https://github.com/Adventurer-E/FamilyShield/wiki/Recipes) |
+| Run tests; understand CI and preview links | [Testing and checks](https://github.com/Adventurer-E/FamilyShield/wiki/Testing-and-checks) |
+| Pick up a ticket, branch, get reviewed, merge | [How we work as a team](https://github.com/Adventurer-E/FamilyShield/wiki/Team-workflow) |
+| Look up a word | [Glossary](https://github.com/Adventurer-E/FamilyShield/wiki/Glossary) |
+| Set up the board, tokens and branch rules (repo admin) | [One-time GitHub setup](https://github.com/Adventurer-E/FamilyShield/wiki/GitHub-setup) |
 
-Money is written in dollars. Change a number, save, and the app shows it on the
-next refresh.
-
-**Shared state vs. your working copy.** `data/` is committed. It holds the
-setup tables and the shared *starting state* of the activity tables. When you use
-the app, the server writes activity to **`data/local/`**, a git-ignored working
-copy, so testing never creates conflicts between branches or developers.
-`npm run data:reset` starts over from the shared state. `npm run data:save`
-copies your state into `data/`, to commit on purpose when you want to share a
-scenario. Details are in [data/README.md](data/README.md#two-layers-shared-state-and-your-working-copy).
-
-**Two modes, same app:**
-
-| | `npm run dev` | GitHub Pages / `npm run dev:browser` |
-| --- | --- | --- |
-| Backend | Node server (`packages/server`) | The same backend code, running in the browser |
-| Data | Setup from `data/`; activity in your git-ignored `data/local/` | `data/*.csv` bundled at build time; activity saved in the visitor’s browser |
-| Shared between browsers | Yes | No |
-| Top-bar label | “Data: CSV files via server” | “Data: CSV files in this browser”, with CSV downloads |
-
-### Repository layout
+### Repository at a glance
 
 ```
-data/          The CSV "fake database": shared, committed state (see data/README.md)
-  local/       Your working copy, git-ignored, written by the server
-packages/
-  core/        Business rules as pure functions, with no dependencies and full tests
-               money (integer cents) · fees · schedules · points · rewards · loan lifecycle
-  service/     The backend logic: the API's operations over the CSV database
-               CSV reader/writer · table mapping · privacy redaction · bank ledger · scripted relatives
-  server/      Node HTTP server exposing the service as the REST API in docs/API.md
-  sdk/         The embeddable module (React, rendered in a shadow root)
-               mountFamilyShield() · bootEmbed() · HttpApi · functional-mockup hosts
-apps/
-  demo-bank/   "BlueRiver Bank", a fictional host app that embeds the SDK
-scripts/
-  dev.mjs      Runs the server and the bank app together
-docs/
-  ARCHITECTURE.md   How the pieces fit and where money actually moves
-  INTEGRATION.md    How a bank embeds FamilyShield (web, iOS, Android, React Native)
-  API.md            The backend contract the SDK expects
+apps/demo-bank/     BlueRiver Bank, the pretend bank app FamilyShield is embedded in
+packages/sdk/       The FamilyShield module: every screen of our product
+packages/core/      Business rules: fees, schedules, points, rewards
+packages/service/   Back-end logic over the CSV data
+packages/server/    The back-end web server (port 8787)
+data/               The CSV "fake database" (shared starting state; your copy is data/local/)
+docs/               Architecture, integration and API reference (developer guide: the wiki)
+.github/            CI, previews, deploys and the ticket workflow
 ```
 
-### Scripts
+### Everyday commands
 
-Run these from the repo root:
-
-| Command | What it does |
+| Command | Does |
 | --- | --- |
-| `npm run dev` | Backend server + BlueRiver functional mockup, both with hot reload |
-| `npm run dev:browser` | The bank app alone, with the backend running in the browser (like GitHub Pages) |
-| `npm run dev:server` | The backend server alone, on http://localhost:8787/v1 |
-| `npm run data:reset` | Start your working copy (`data/local/`) over from the shared state in `data/` |
-| `npm run data:status` | Show which activity files differ between your working copy and `data/` |
-| `npm run data:save` | Copy your working copy into `data/`, to review and commit |
-| `npm test` | Run the core and service tests (Vitest) |
-| `npm run typecheck` | Type-check every package |
-| `npm run build` | Build the SDK (embed page + library) and the BlueRiver functional mockup |
-| `npm run check` | Type-check, test and build, the same as CI |
+| `npm run dev` | Run everything (server + bank app) with live reload |
+| `npm run check` | All checks GitHub runs: types, tests, build |
+| `npm run data:reset` | Start your data over from the shared state |
 
-The server reads `PORT` (default `8787`), `DATA_DIR` (shared data, default
-`data/`) and `WORK_DIR` (working copy, default `data/local/`).
-For example, `WORK_DIR=/tmp/try-this npm run dev:server` gives you a throwaway working copy.
+More in [Testing and checks](https://github.com/Adventurer-E/FamilyShield/wiki/Testing-and-checks) and [The data and the back-end](https://github.com/Adventurer-E/FamilyShield/wiki/Data-and-back-end).
 
-### How the code is organized
+### Reference docs
 
-- **Business rules live in `packages/core` only.** Each lifecycle step
-  (`respondToRequest`, `signAsBorrower`, `recordPayment`, `requestPause`, …) is a
-  pure function from one `LoanCase` to the next, or it throws a
-  `FamilyShieldError` whose message is safe to show users. The UI never computes
-  fees or schedules on its own.
-- **Rules are data.** Fee, limits, terms, points and pauses come from
-  `data/settings.csv`, and rewards from `data/rewards.csv`. The UI gets them from
-  the backend (`GET /v1/config`); `DEFAULT_RULES` in `core/src/config.ts` is only
-  the fallback.
-- **One backend, two hosts.** `packages/service` implements every API
-  operation over the CSV tables. The Node server wraps it in HTTP; the browser
-  mode (`createBrowserMockup`) calls it directly. Both apply the same rules,
-  privacy redaction, ledger postings and scripted relatives, so the two modes
-  can’t drift apart.
-- **Money is integer cents** inside the code and dollars in the CSVs.
-  `splitEvenly` makes installments add up exactly; leftover cents go to the
-  earliest payments.
-- **The SDK talks to a `FamilyShieldApi` interface**: `HttpApi` against any
-  server that implements [docs/API.md](docs/API.md), or the in-browser backend.
-- **Styles are isolated.** The module renders in a shadow root, and partner banks
-  re-skin it with theme tokens (`sdk/src/theme.ts`) instead of CSS overrides.
-
-### Embedding it, in one example
-
-```ts
-import { mountFamilyShield, HttpApi } from '@familyshield/sdk';
-
-const fs = mountFamilyShield(document.getElementById('familyshield')!, {
-  api: new HttpApi({ baseUrl: 'https://api.familyshield.example/v1', getToken: getCustomerToken }),
-  theme: { brand: '#0B5CAD' },
-  onEvent: (e) => {
-    if (e.type === 'close') hideSheet();
-    if (e.type === 'loan.funded' || e.type === 'payment.made') refreshBalances();
-  },
-});
-```
-
-Native apps load the standalone embed page in a WebView instead. See
-[docs/INTEGRATION.md](docs/INTEGRATION.md).
-
-### Testing
-
-- `packages/core/test` covers limits, offers, signing, fee-inclusive
-  schedules (every lender gets exactly their principal back), points (the example
-  family in the functional mockup earns exactly 1,200), pauses, reward unlocking
-  at full repayment, custom rules and immutability.
-- `packages/service/test` runs the whole family story against the real
-  `data/` files: CSV round-trips (quotes, commas, newlines), friendly error
-  messages for bad edits, live pickup of hand edits, bank balances, and reset.
-- CI (`.github/workflows/ci.yml`) runs type-checks, tests and builds on every
-  push and pull request.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how the pieces fit and where money moves
+- [docs/INTEGRATION.md](docs/INTEGRATION.md): how a bank embeds FamilyShield (web, iOS, Android, React Native)
+- [docs/API.md](docs/API.md): the back-end's endpoints
 
 ### What’s next
 
-The prototype covers the full customer experience. Before a pilot it would need:
+The functional mockup covers the full customer experience. Before a pilot it would need:
 
 - [ ] Production storage: swap the CSV files for a real database with an audit log (the service’s `CsvStorage` interface is the seam)
 - [ ] Bank-side integration: token exchange, and money movement through the bank’s payment rails
