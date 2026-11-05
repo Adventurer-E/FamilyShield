@@ -374,7 +374,7 @@ class TicketBot {
     if (this.board) await this.board.add(issue.node_id).catch((e) => this.core.warning(`board: ${e.message}`));
     if (!statusOfLabels(issue.labels)) await this.setStatus(issue, 'icebox', { quiet: true });
     else if (this.board) await this.board.setStatus(issue.node_id, statusOfLabels(issue.labels).board).catch(() => {});
-    await this.comment(issue.number, `Thanks for the ticket! It's in **Icebox**.\n\n${HELP}`);
+    // No welcome comment: the command list is on the wiki and behind /help.
   }
 
   async onIssueLabeled(issue, label, actor) {

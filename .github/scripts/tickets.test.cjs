@@ -212,7 +212,7 @@ describe('a ticket from icebox to done', () => {
     assert.ok(gh.state.labels.some((l) => l.name === 'status: under review'), 'labels created');
     assert.deepEqual(t.parseMeta(gh.state.issues[1].body).reviewers, ['ann']);
     assert.ok(board.moves.includes('I_1:Icebox'));
-    assert.match(gh.commentsOn(1)[0], /Ticket commands/);
+    assert.deepEqual(gh.commentsOn(1), [], 'no welcome comment on new tickets');
 
     // 2. Bob picks it up.
     await bot.onIssueComment(await bot.getIssue(1), '/start', 'bob');
