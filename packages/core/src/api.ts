@@ -1,5 +1,6 @@
 import type { Rules } from './config';
 import type { Cents } from './money';
+import type { ReasonOption } from './reasons';
 import type { Reward } from './rewards';
 import type { Person, Reason } from './types';
 
@@ -22,16 +23,20 @@ export interface CreateRequestInput {
   months: number;
 }
 
-/** The rules and reward catalog the backend is running with. */
+/** The rules, request reasons and reward catalog the backend is running with. */
 export interface AppConfig {
   rules: Rules;
+  reasons: ReasonOption[];
   rewards: Reward[];
 }
 
 /** Functional-mockup only: the bank side, so the host app can show balances. */
 export interface AccountSummary {
   balance: Cents;
+  /** FamilyShield money movements, newest first. These change the balance. */
   transactions: Array<{ id: string; at: string; amount: Cents; memo: string }>;
+  /** Everyday bank activity shown under them, for realism only. Not counted in the balance. */
+  exampleTransactions: Array<{ id: string; date: string; name: string; category: string; amount: Cents }>;
 }
 
 /** Functional-mockup only: someone you can switch to in the top bar. */

@@ -1,12 +1,6 @@
 import { formatDate, formatMoney, isOpen, nextInstallment } from '@familyshield/core';
 import type { AccountSummary, LoanCase } from '@familyshield/core';
 
-const BASE_TRANSACTIONS = [
-  { id: 'base-1', name: 'Corner Grocery', meta: 'Groceries · Oct 30', amount: -8_624 },
-  { id: 'base-2', name: 'Westside Auto Shop', meta: 'Auto · Oct 28', amount: -32_000 },
-  { id: 'base-3', name: 'Payroll deposit', meta: 'Income · Oct 25', amount: 250_000 },
-];
-
 /** What the FamilyShield entry card says, from the FamilyShield API. */
 export function entrySubtitle(userId: string, myLoan: LoanCase | null, incoming: LoanCase[]): { text: string; badge?: string } {
   const needsMe = incoming.filter((l) => {
@@ -44,7 +38,13 @@ export function BankHome(props: {
 }) {
   const transactions = [
     ...(props.account?.transactions ?? []).map((t) => ({ id: t.id, name: t.memo, meta: `FamilyShield · ${formatDate(t.at.slice(0, 10), false)}`, amount: t.amount })),
-    ...BASE_TRANSACTIONS,
+    // Everyday bank activity from data/example_transactions.csv, for realism.
+    ...(props.account?.exampleTransactions ?? []).map((t) => ({
+      id: t.id,
+      name: t.name,
+      meta: [t.category, formatDate(t.date, false)].filter(Boolean).join(' · '),
+      amount: t.amount,
+    })),
   ].slice(0, 6);
 
   return (

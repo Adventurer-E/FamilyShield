@@ -74,6 +74,35 @@ describe('reading data/', () => {
     expect(() => readDatabase(files)).toThrow(/people\.csv, line 2, column "opening_balance"/);
   });
 
+  it('reads the request defaults, offer amounts, reasons and example transactions', () => {
+    const db = readDatabase(loadDataDir());
+    expect(db.rules.defaultAmount).toBe(150_000);
+    expect(db.rules.defaultTerm).toBe(10);
+    expect(db.rules.offerAmounts).toEqual([25_000, 50_000, 100_000]);
+    expect(db.reasons.map((r) => r.id)).toEqual(['car', 'medical', 'job', 'other']);
+    expect(db.reasons[1]!.template).toContain('didn’t fully cover, and');
+    expect(db.exampleTransactions.map((t) => [t.name, t.amount])).toEqual([
+      ['Corner Grocery', -8_624],
+      ['Westside Auto Shop', -32_000],
+      ['Payroll deposit', 250_000],
+    ]);
+  });
+
+  it('rejects request defaults the rules don’t allow', () => {
+    const base = loadDataDir();
+    const term = { ...base, 'settings.csv': base['settings.csv']!.replace('default_term_months,10,', 'default_term_months,9,') };
+    expect(() => readDatabase(term)).toThrow(/default_term_months/);
+    const amount = { ...base, 'settings.csv': base['settings.csv']!.replace('default_request,1500,', 'default_request,9000,') };
+    expect(() => readDatabase(amount)).toThrow(/default_request/);
+    const reason = { ...base, 'reasons.csv': 'id,label,template\nrent,Rent,Behind on rent\n' };
+    expect(() => readDatabase(reason)).toThrow(/reasons\.csv, line 2, column "id"/);
+  });
+
+  it('falls back to the built-in reasons when reasons.csv is missing', () => {
+    const { 'reasons.csv': _omit, ...files } = loadDataDir();
+    expect(readDatabase(files).reasons.map((r) => r.label)).toContain('Car repair');
+  });
+
   it('accepts friendly money formats', () => {
     const base = loadDataDir();
     const files = { ...base, 'people.csv': base['people.csv']!.replace('4328.50', '"$4,328.5"') };
@@ -128,6 +157,14 @@ describe('the service over CSVs', () => {
     storage.files['people.csv'] = storage.files['people.csv']!.replace('4328.50', '9999.99');
     expect(svc.config().rules.feeRate).toBe(0.03);
     expect(svc.account('alex').balance).toBe(999_999);
+  });
+
+  it('serves reasons and example transactions without counting them in the balance', () => {
+    const { svc } = setup();
+    expect(svc.config().reasons).toHaveLength(4);
+    const account = svc.account('alex');
+    expect(account.balance).toBe(432_850);
+    expect(account.exampleTransactions).toHaveLength(3);
   });
 
   it('reads back exactly what it wrote', () => {

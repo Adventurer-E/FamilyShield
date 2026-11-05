@@ -36,9 +36,12 @@ function RequestSummary({ loan }: { loan: LoanCase }) {
 
 /** A circle member answers a request privately. */
 export function Respond({ loan }: { loan: LoanCase }) {
-  const { api, run, nameOf } = useFs();
+  const { api, run, nameOf, data } = useFs();
   const mine = loan.offers[0];
-  const presets = [25_000, 50_000, 100_000].filter((v) => v <= loan.amount);
+  // Quick-pick amounts from settings.csv (lender_offer_amounts), up to the request.
+  const { offerAmounts } = data.config.rules;
+  const presets = offerAmounts.filter((v) => v <= loan.amount);
+  const largestPreset = Math.max(0, ...offerAmounts);
   const [amount, setAmount] = useState(presets[presets.length - 1] ?? loan.amount);
   const [note, setNote] = useState('');
   const who = nameOf(loan.borrowerId);
@@ -63,7 +66,7 @@ export function Respond({ loan }: { loan: LoanCase }) {
                 </button>
               ))}
             </div>
-            {loan.amount > 100_000 ? (
+            {loan.amount > largestPreset ? (
               <button type="button" className="fs-chip" aria-pressed={amount === loan.amount} onClick={() => setAmount(loan.amount)}>
                 The full {formatMoney(loan.amount)}
               </button>

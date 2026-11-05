@@ -42,7 +42,7 @@ in `packages/core/src/types.ts`. `Profile` is defined in
 
 | Method & path | Returns | Notes |
 | --- | --- | --- |
-| `GET /config` | `AppConfig` | `{ rules, rewards }`: the fee, limits, terms, points and reward catalog in force (from `settings.csv` and `rewards.csv` in the mockup). No auth needed |
+| `GET /config` | `AppConfig` | `{ rules, reasons, rewards }`: the fee, limits, terms, request defaults (`defaultAmount`, `defaultTerm`), lender quick-pick amounts (`offerAmounts`), points, the request reasons with their pre-filled descriptions, and the reward catalog in force (from `settings.csv`, `reasons.csv` and `rewards.csv` in the mockup). No auth needed |
 | `GET /me` | `Profile` | The caller, their circle, the people they may see, and their linked account |
 | `GET /me/loan` | `LoanCase \| null` | The caller’s latest loan as borrower (excluding cancelled) |
 | `GET /me/incoming` | `LoanCase[]` | Requests the caller was asked on, **redacted** for a lender, newest first |
@@ -75,7 +75,7 @@ These stand in for the bank’s own systems and are **not** part of the producti
 | Method & path | Returns | Notes |
 | --- | --- | --- |
 | `GET /mockup/people` | `MockupPerson[]` | Everyone in `people.csv`, for the “Viewing as” menu |
-| `GET /mockup/accounts/:userId` | `AccountSummary` | `{ balance, transactions }`: the opening balance plus `transactions.csv` |
+| `GET /mockup/accounts/:userId` | `AccountSummary` | `{ balance, transactions, exampleTransactions }`: the opening balance plus `transactions.csv`, and the everyday bank activity from `example_transactions.csv` (display only, not counted in the balance) |
 | `POST /mockup/reset` | `204` | Empties every activity table (setup tables untouched) |
 
 If a CSV can’t be read, every call returns `500` with

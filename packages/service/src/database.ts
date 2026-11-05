@@ -1,4 +1,4 @@
-import { DEFAULT_RULES } from '@familyshield/core';
+import { DEFAULT_REASONS, DEFAULT_RULES } from '@familyshield/core';
 import type {
   Agreement,
   Cents,
@@ -10,6 +10,7 @@ import type {
   PauseStatus,
   PointsEntry,
   Reason,
+  ReasonOption,
   Reward,
   Rules,
 } from '@familyshield/core';
@@ -62,11 +63,23 @@ export interface Transaction {
   memo: string;
 }
 
+/** Everyday bank activity shown on the bank home, for realism only. */
+export interface ExampleTransaction {
+  id: string;
+  date: string;
+  name: string;
+  category: string;
+  /** Positive = money in, negative = money out. Not counted in any balance. */
+  amount: Cents;
+}
+
 export interface Database {
   rules: Rules;
   people: PersonRow[];
   circles: CircleRow[];
+  reasons: ReasonOption[];
   rewards: Reward[];
+  exampleTransactions: ExampleTransaction[];
   autoReplies: AutoReplyRow[];
   loans: LoanCase[];
   transactions: Transaction[];
@@ -78,8 +91,10 @@ export const SETUP_TABLES = {
   'settings.csv': ['key', 'value', 'description'],
   'people.csv': ['id', 'first_name', 'last_name', 'account_label', 'opening_balance'],
   'circles.csv': ['owner_id', 'member_id', 'nickname'],
+  'reasons.csv': ['id', 'label', 'template'],
   'rewards.csv': ['id', 'name', 'short_label', 'points_needed', 'category', 'partner', 'headline', 'detail', 'terms', 'valid_for_months'],
   'auto_replies.csv': ['member_id', 'reply_after_seconds', 'reply', 'offer_amount', 'note', 'auto_sign', 'auto_approve_pause'],
+  'example_transactions.csv': ['id', 'date', 'name', 'category', 'amount'],
 } as const;
 
 export const ACTIVITY_TABLES = {
@@ -196,6 +211,24 @@ function readRules(files: CsvFiles): Rules {
           });
         if (rules.terms.length === 0) fail(r, 'value', 'list at least one term, e.g. 6|10|12');
         break;
+      case 'default_request':
+        rules.defaultAmount = money(r, 'value');
+        break;
+      case 'default_term_months':
+        rules.defaultTerm = int(r, 'value');
+        break;
+      case 'lender_offer_amounts':
+        rules.offerAmounts = r
+          .get('value')
+          .split(/[|;/\s]+/)
+          .filter(Boolean)
+          .map((t) => {
+            const n = Number(t.replace(/[$,]/g, ''));
+            if (!Number.isFinite(n) || n <= 0) fail(r, 'value', `"${t}" is not an amount in dollars`);
+            return Math.round(n * 100);
+          });
+        if (rules.offerAmounts.length === 0) fail(r, 'value', 'list at least one amount, e.g. 250|500|1000');
+        break;
       case 'max_pauses':
         rules.maxPauses = int(r, 'value');
         break;
@@ -217,6 +250,10 @@ function readRules(files: CsvFiles): Rules {
   if (rules.amountMin > rules.amountMax) throw new CsvDataError('settings.csv: min_request is larger than max_request.');
   if (rules.amountStep <= 0) throw new CsvDataError('settings.csv: request_step must be more than 0.');
   if (rules.feeRate < 0) throw new CsvDataError('settings.csv: fee_rate_percent can’t be negative.');
+  if (rules.defaultAmount < rules.amountMin || rules.defaultAmount > rules.amountMax)
+    throw new CsvDataError('settings.csv: default_request must be between min_request and max_request.');
+  if (!rules.terms.includes(rules.defaultTerm))
+    throw new CsvDataError('settings.csv: default_term_months must be one of terms_months.');
   return rules;
 }
 
@@ -244,6 +281,38 @@ function readCircles(files: CsvFiles, people: PersonRow[]): CircleRow[] {
     if (!known.has(ownerId)) fail(r, 'owner_id', `"${ownerId}" isn’t in people.csv`);
     if (!known.has(memberId)) fail(r, 'member_id', `"${memberId}" isn’t in people.csv`);
     return { ownerId, memberId, nickname: opt(r, 'nickname') };
+  });
+}
+
+const REASONS = ['car', 'medical', 'job', 'other'] as const satisfies readonly Reason[];
+
+function readReasons(files: CsvFiles): ReasonOption[] {
+  if (files['reasons.csv'] === undefined) return DEFAULT_REASONS.map((r) => ({ ...r }));
+  const reasons = readTable('reasons.csv', files['reasons.csv'], ['id', 'label', 'template']).map((r) => ({
+    id: oneOf(r, 'id', REASONS),
+    label: req(r, 'label'),
+    template: r.get('template'),
+  }));
+  if (reasons.length === 0) throw new CsvDataError('reasons.csv: list at least one reason.');
+  const ids = new Set<string>();
+  for (const r of reasons) {
+    if (ids.has(r.id)) throw new CsvDataError(`reasons.csv: the id "${r.id}" appears twice.`);
+    ids.add(r.id);
+  }
+  return reasons;
+}
+
+function readExampleTransactions(files: CsvFiles): ExampleTransaction[] {
+  return readTable('example_transactions.csv', files['example_transactions.csv'], ['id', 'date', 'name', 'amount']).map((r) => {
+    const date = req(r, 'date');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) fail(r, 'date', `"${date}" should be a date like 2026-10-30`);
+    return {
+      id: req(r, 'id'),
+      date,
+      name: req(r, 'name'),
+      category: r.get('category'),
+      amount: money(r, 'amount'),
+    };
   });
 }
 
@@ -276,7 +345,6 @@ function readAutoReplies(files: CsvFiles): AutoReplyRow[] {
 
 // ---------------------------------------------------------------- activity tables
 
-const REASONS = ['car', 'medical', 'job', 'other'] as const satisfies readonly Reason[];
 const LOAN_STATUSES = ['collecting', 'signing', 'active', 'repaid', 'cancelled'] as const satisfies readonly LoanStatus[];
 const OFFER_STATUSES = ['pending', 'offered', 'declined', 'expired'] as const satisfies readonly OfferStatus[];
 const PAUSE_STATUSES = ['pending', 'approved', 'declined'] as const satisfies readonly PauseStatus[];
@@ -395,7 +463,9 @@ export function readDatabase(files: CsvFiles): Database {
     rules: readRules(files),
     people,
     circles: readCircles(files, people),
+    reasons: readReasons(files),
     rewards: readRewards(files),
+    exampleTransactions: readExampleTransactions(files),
     autoReplies: readAutoReplies(files),
     loans: readLoans(files),
     transactions: readTransactions(files),
