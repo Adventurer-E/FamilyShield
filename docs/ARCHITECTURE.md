@@ -72,9 +72,9 @@ bank, which debits and credits accounts through its own rails.
 - At **each payment**, the bank debits the borrower’s installment, credits each
   lender their part, and credits FamilyShield the fee portion.
 
-The demo’s mock backend simulates exactly these ledger postings
-(`settle()` in `sdk/src/api/mock/backend.ts`), which is why the demo bank’s
-balances move.
+In the functional mockup, the mock backend simulates exactly these ledger
+postings (`settle()` in `sdk/src/api/mock/backend.ts`), which is why
+BlueRiver’s balances move.
 
 `HostEvent`s such as `loan.funded` and `payment.made` are **UI hints**, so the
 host can refresh balances or show a toast. They must never trigger money

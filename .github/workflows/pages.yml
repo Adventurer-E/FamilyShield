@@ -1,6 +1,6 @@
-name: Deploy demo to GitHub Pages
+name: Deploy functional mockup to GitHub Pages
 
-# Publishes the BlueRiver demo bank (apps/demo-bank) at
+# Publishes the BlueRiver functional mockup (apps/demo-bank) at
 # https://adventurer-e.github.io/FamilyShield/ on every push to main.
 # One-time setup: Settings → Pages → Source: "GitHub Actions".
 
@@ -30,7 +30,7 @@ jobs:
           cache-dependency-path: package.json
       - name: Install
         run: npm install --no-audit --no-fund
-      - name: Build demo bank
+      - name: Build functional mockup
         run: npm run build -w @familyshield/demo-bank
       - uses: actions/upload-pages-artifact@v3
         with:

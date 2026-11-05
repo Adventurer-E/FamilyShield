@@ -9,7 +9,7 @@ is hit by a car repair, a medical bill or a lost job, they can ask their trusted
 family circle for help privately, receive private offers, sign clear
 interest-free terms, and repay automatically, all without leaving their bank’s app.
 
-**▶ [Try the live demo](https://adventurer-e.github.io/FamilyShield/)**: no install needed. It runs entirely in your browser.
+**▶ [Try the live functional mockup](https://adventurer-e.github.io/FamilyShield/)**: no install needed. It runs entirely in your browser.
 
 > **Status:** working prototype. Every person, bank, partner and dollar in this
 > repository is fictional.
@@ -74,19 +74,19 @@ You need Node.js 20 or newer.
 
 ```bash
 npm install
-npm run dev          # BlueRiver demo bank at http://localhost:5173
+npm run dev          # BlueRiver functional mockup at http://localhost:5173
 ```
 
-Then follow the story on the right side of the demo page:
+Then follow the story on the right side of the functional mockup page:
 
 1. As **Alex**, tap the FamilyShield card and send a request.
 2. Cousin Maya and Aunt Lisa answer automatically within a few seconds.
 3. Switch to **Mom** in the top bar. Her bank shows Alex’s request; offer privately.
 4. Back as Alex, accept the offers and sign. Maya signs automatically; switch to Mom to sign hers.
-5. Make payments (or use the demo shortcut), ask for a pause, and claim a partner reward.
+5. Make payments (or use the functional mockup shortcut), ask for a pause, and claim a partner reward.
 
 Use **Embed as: Inline SDK / WebView** in the top bar to switch integration
-styles. **Reset demo** starts over. Demo state is saved in your browser’s localStorage.
+styles. **Reset functional mockup** starts over. Functional mockup state is saved in your browser’s localStorage.
 
 ### Repository layout
 
@@ -110,10 +110,10 @@ Run these from the repo root:
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Start the demo bank with hot reload |
+| `npm run dev` | Start the BlueRiver functional mockup with hot reload |
 | `npm test` | Run the core domain tests (Vitest) |
 | `npm run typecheck` | Type-check every package |
-| `npm run build` | Build the SDK (embed page + library) and the demo bank |
+| `npm run build` | Build the SDK (embed page + library) and the BlueRiver functional mockup |
 | `npm run check` | Type-check, test and build, the same as CI |
 
 ### How the code is organized
@@ -128,7 +128,7 @@ Run these from the repo root:
 - **Tunable rules are in one file:** `packages/core/src/config.ts` holds the fee rate,
   amount limits, terms, points and pause allowance.
 - **The SDK talks to a `FamilyShieldApi` interface** with two implementations:
-  `HttpApi` for production and `createMockBackend()` for demos and tests. The
+  `HttpApi` for production and `createMockBackend()` for functional mockups and tests. The
   mock applies the same core rules, redacts what lenders may see, simulates the
   bank ledger, and plays the scripted relatives in `sdk/src/api/mock/seed.ts`.
 - **Styles are isolated.** The module renders in a shadow root, and partner banks
@@ -155,8 +155,8 @@ Native apps load the standalone embed page in a WebView instead. See
 ### Testing
 
 - `packages/core/test` covers limits, offers, signing, fee-inclusive
-  schedules (every lender gets exactly their principal back), points (the demo
-  family earns exactly 1,200), pauses, reward unlocking at full repayment, and
+  schedules (every lender gets exactly their principal back), points (the example
+  family in the functional mockup earns exactly 1,200), pauses, reward unlocking at full repayment, and
   immutability.
 - CI (`.github/workflows/ci.yml`) runs type-checks, tests and builds on every
   push and pull request.
