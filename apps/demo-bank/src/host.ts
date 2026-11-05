@@ -13,6 +13,14 @@ import { SEED_CSV } from './seedCsv';
  */
 const apiUrl = import.meta.env.VITE_API_URL;
 
+/**
+ * The main site and every pull-request preview share one origin
+ * (adventurer-e.github.io), so browser-mode data is keyed by the page's folder:
+ * a preview never sees, or overwrites, the main site's data. The WebView
+ * iframe lives in the same folder, so it shares the key with its bank page.
+ */
+const folder = typeof window !== 'undefined' ? new URL('.', window.location.href).pathname : '/';
+
 export const host: MockupHost = apiUrl
   ? createServerMockup({ baseUrl: apiUrl })
-  : createBrowserMockup({ files: SEED_CSV, storageKey: 'familyshield-csv-v1' });
+  : createBrowserMockup({ files: SEED_CSV, storageKey: `familyshield-csv-v1:${folder}` });
