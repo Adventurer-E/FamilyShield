@@ -1,0 +1,110 @@
+:root {
+  --navy: #163a70;
+  --ink: #13213a;
+  --muted: #5a6478;
+  --line: #e2e6ee;
+  --ground: #f3f5f9;
+  --page: #dfe4ec;
+  --green: #11683a;
+  --fs: #0e6e66;
+  font-family: 'Manrope', system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--page);
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 3px solid var(--fs); outline-offset: 2px; }
+
+/* ---------- demo chrome (not part of the bank) ---------- */
+.demo { min-height: 100vh; display: flex; flex-direction: column; }
+.demo-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+  padding: 10px 16px; background: var(--ink); color: #fff; font-size: 13px;
+}
+.demo-brand { font-weight: 800; font-size: 15px; margin-right: auto; }
+.demo-brand span { font-weight: 600; color: #f2c14e; margin-left: 4px; }
+.seg { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.seg-label { color: #aab4c6; margin-right: 4px; }
+.seg button, .reset {
+  border: 1px solid #3b4a66; background: transparent; color: #fff; border-radius: 999px;
+  padding: 6px 12px; min-height: 34px; font-weight: 700; font-size: 13px;
+}
+.seg button[aria-pressed='true'] { background: #fff; color: var(--ink); border-color: #fff; }
+.reset { border-color: #f2c14e; color: #f2c14e; }
+
+.stage { flex: 1; display: flex; gap: 40px; justify-content: center; align-items: flex-start; padding: 32px 16px; flex-wrap: wrap; }
+.notes { max-width: 340px; font-size: 14px; line-height: 1.55; color: #3b4659; }
+.notes h2 { font-size: 18px; color: var(--ink); margin: 8px 0 8px; }
+.notes ol { padding-left: 20px; margin: 0 0 12px; }
+.notes li { margin-bottom: 6px; }
+.notes .fine { font-size: 12px; color: var(--muted); }
+
+/* ---------- the phone ---------- */
+.phone {
+  width: 390px; height: 844px; max-width: 100%; position: relative; overflow: hidden;
+  border-radius: 36px; background: var(--ground); box-shadow: 0 24px 60px rgba(19, 33, 58, 0.25), 0 0 0 10px #0d1526;
+}
+@media (max-width: 480px) {
+  /* On a real phone the "phone" is the screen: the demo bar on top, the app filling the rest. */
+  .demo { height: 100vh; height: 100dvh; }
+  .demo-bar { padding: 8px 12px; gap: 6px 10px; }
+  .demo-brand { display: none; }
+  .seg-label { display: none; }
+  .stage { padding: 0; display: block; min-height: 0; overflow-y: auto; }
+  .phone { width: 100%; height: 100%; border-radius: 0; box-shadow: none; }
+  .notes { padding: 16px; }
+}
+
+/* ---------- BlueRiver Bank ---------- */
+.bank { height: 100%; display: flex; flex-direction: column; }
+.bank-scroll { flex: 1; overflow-y: auto; padding: 24px 16px 24px; display: flex; flex-direction: column; gap: 16px; }
+.bank-top { display: flex; align-items: center; justify-content: space-between; }
+.logo { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 800; color: var(--navy); }
+.round { width: 44px; height: 44px; border-radius: 22px; border: none; background: #fff; display: inline-flex; align-items: center; justify-content: center; color: var(--navy); }
+.greeting { margin: 0; font-weight: 600; color: var(--muted); }
+.balance { background: var(--navy); color: #fff; border-radius: 20px; padding: 20px; }
+.balance-label { font-size: 13px; color: #c9d6ec; font-weight: 600; }
+.balance-amount { font-size: 34px; font-weight: 800; letter-spacing: -0.02em; margin: 2px 0; }
+.quick { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.quick button { border: none; background: none; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 0; }
+.quick .round { width: 52px; height: 52px; border-radius: 26px; }
+
+.fs-entry {
+  border: 1px solid #bfddd7; background: #fff; border-radius: 20px; padding: 16px;
+  display: flex; align-items: center; gap: 14px; text-align: left; color: var(--muted);
+}
+.fs-entry-icon { width: 48px; height: 48px; border-radius: 24px; background: var(--fs); color: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.fs-entry-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.fs-entry-title { font-size: 16px; font-weight: 800; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+.fs-entry-sub { font-size: 13px; line-height: 1.4; }
+.badge { font-size: 11px; font-weight: 800; color: var(--fs); background: #e3f2ef; border-radius: 999px; padding: 2px 8px; }
+
+.card { background: #fff; border-radius: 20px; padding: 16px; }
+.card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.card-head h2 { font-size: 16px; margin: 0; }
+.card-head a { font-size: 13px; font-weight: 700; color: var(--fs); }
+.txns { list-style: none; margin: 0; padding: 0; }
+.txns li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid #eef1f6; }
+.txns li:first-child { border-top: none; }
+.txn-name { font-weight: 700; font-size: 15px; }
+.txn-meta { font-size: 12px; color: var(--muted); }
+.txn-amount { font-weight: 700; white-space: nowrap; }
+.txn-amount.in { color: var(--green); }
+
+.tabs { height: 84px; padding-bottom: 16px; background: #fff; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); flex-shrink: 0; }
+.tabs button { border: none; background: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.tabs button.active { color: var(--navy); font-weight: 800; }
+
+/* ---------- FamilyShield sheet ---------- */
+.sheet { position: absolute; inset: 0; background: var(--ground); z-index: 5; animation: rise 0.25s ease-out; }
+.sheet-body { width: 100%; height: 100%; border: 0; display: block; }
+@keyframes rise { from { transform: translateY(24px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
+
+.toast {
+  position: absolute; left: 16px; right: 16px; bottom: 24px; z-index: 10;
+  background: var(--ink); color: #fff; border-radius: 14px; padding: 12px 14px;
+  font-size: 14px; font-weight: 700; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+.toast span { display: block; font-size: 11px; font-weight: 600; color: #aab4c6; margin-top: 2px; }
