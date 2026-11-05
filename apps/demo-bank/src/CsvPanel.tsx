@@ -27,10 +27,25 @@ export function CsvPanel({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         {host.mode === 'server' ? (
-          <p>
-            The backend server reads and writes the CSV files in the repo’s <code>data/</code> folder. Open them in any spreadsheet or text
-            editor; your changes show up on the next refresh. See <code>data/README.md</code> for every column.
-          </p>
+          <>
+            <p>The backend server works with two folders of CSV files. Open any of them in a spreadsheet or text editor; edits show up on the next refresh.</p>
+            <ul className="csv-list">
+              <li>
+                <span>
+                  <code>data/</code>: shared and committed. People, rules, rewards, and the starting state.
+                </span>
+              </li>
+              <li>
+                <span>
+                  <code>data/local/</code>: your working copy, ignored by git. Everything you do here is written there.
+                </span>
+              </li>
+            </ul>
+            <p>
+              “Reset functional mockup” (or <code>npm run data:reset</code>) goes back to the shared starting state. <code>npm run data:save</code>{' '}
+              copies your state into <code>data/</code> so you can commit and share it. See <code>data/README.md</code>.
+            </p>
+          </>
         ) : (
           <>
             <p>

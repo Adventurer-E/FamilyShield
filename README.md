@@ -108,23 +108,30 @@ There is no real database. Everything lives in editable CSV files in
 | `auto_replies.csv`: relatives the mockup plays automatically | `transactions.csv`: every bank posting |
 
 Money is written in dollars. Change a number, save, and the app shows it on the
-next refresh. Running the app changes the activity files, so expect them in
-`git status`. Press **Reset functional mockup** before committing if you
-want them empty again.
+next refresh.
+
+**Shared state vs. your working copy.** `data/` is committed. It holds the
+setup tables and the shared *starting state* of the activity tables. When you use
+the app, the server writes activity to **`data/local/`**, a git-ignored working
+copy, so testing never creates conflicts between branches or developers.
+`npm run data:reset` starts over from the shared state. `npm run data:save`
+copies your state into `data/`, to commit on purpose when you want to share a
+scenario. Details are in [data/README.md](data/README.md#two-layers-shared-state-and-your-working-copy).
 
 **Two modes, same app:**
 
 | | `npm run dev` | GitHub Pages / `npm run dev:browser` |
 | --- | --- | --- |
 | Backend | Node server (`packages/server`) | The same backend code, running in the browser |
-| Data | `data/*.csv` on disk, read and written live | `data/*.csv` bundled at build time; activity saved in the visitor’s browser |
+| Data | Setup from `data/`; activity in your git-ignored `data/local/` | `data/*.csv` bundled at build time; activity saved in the visitor’s browser |
 | Shared between browsers | Yes | No |
 | Top-bar label | “Data: CSV files via server” | “Data: CSV files in this browser”, with CSV downloads |
 
 ### Repository layout
 
 ```
-data/          The CSV "fake database" (see data/README.md)
+data/          The CSV "fake database": shared, committed state (see data/README.md)
+  local/       Your working copy, git-ignored, written by the server
 packages/
   core/        Business rules as pure functions, with no dependencies and full tests
                money (integer cents) · fees · schedules · points · rewards · loan lifecycle
@@ -152,13 +159,17 @@ Run these from the repo root:
 | `npm run dev` | Backend server + BlueRiver functional mockup, both with hot reload |
 | `npm run dev:browser` | The bank app alone, with the backend running in the browser (like GitHub Pages) |
 | `npm run dev:server` | The backend server alone, on http://localhost:8787/v1 |
+| `npm run data:reset` | Start your working copy (`data/local/`) over from the shared state in `data/` |
+| `npm run data:status` | Show which activity files differ between your working copy and `data/` |
+| `npm run data:save` | Copy your working copy into `data/`, to review and commit |
 | `npm test` | Run the core and service tests (Vitest) |
 | `npm run typecheck` | Type-check every package |
 | `npm run build` | Build the SDK (embed page + library) and the BlueRiver functional mockup |
 | `npm run check` | Type-check, test and build, the same as CI |
 
-The server reads `PORT` (default `8787`) and `DATA_DIR` (default `data/`), so
-you can point it at a copy of the data, e.g. `DATA_DIR=/tmp/scenario npm run dev:server`.
+The server reads `PORT` (default `8787`), `DATA_DIR` (shared data, default
+`data/`) and `WORK_DIR` (working copy, default `data/local/`).
+For example, `WORK_DIR=/tmp/try-this npm run dev:server` gives you a throwaway working copy.
 
 ### How the code is organized
 

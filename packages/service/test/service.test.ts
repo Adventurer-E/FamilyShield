@@ -152,6 +152,17 @@ describe('the service over CSVs', () => {
     expect(() => svc.profile('stranger')).toThrow(/people\.csv/);
   });
 
+  it('reset restores the shared starting state when the storage keeps one', () => {
+    const shared = loadDataDir();
+    const storage = memoryStorage(shared);
+    const withReset = { ...storage, reset: () => storage.write(Object.fromEntries(Object.entries(shared).filter(([f]) => f in writeActivity(readDatabase(shared))))) };
+    const svc = new FamilyShieldService(withReset);
+    svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 100_000, months: 6 });
+    expect(storage.files['loans.csv']).not.toBe(shared['loans.csv']);
+    svc.reset();
+    expect(storage.files['loans.csv']).toBe(shared['loans.csv']);
+  });
+
   it('reset clears activity but keeps setup', () => {
     const { svc, storage } = setup();
     svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 100_000, months: 6 });

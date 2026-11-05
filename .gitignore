@@ -164,5 +164,7 @@ dist/
 .DS_Store
 Thumbs.db
 
+# CSV fake database: your personal working copy (data/ itself is shared and committed)
+data/local/
 # Server writes CSVs via temp files, then renames them
-data/*.tmp
+data/**/*.tmp

@@ -50,13 +50,20 @@ about a fee or a due date.
             │            FamilyShieldService ◄────────┼─────┼─► FamilyShieldService        │
             │                    │ CsvStorage         │     │   │ CsvStorage               │
             │                    ▼                    │     │   ▼                          │
-            │      data/*.csv on disk (read+write)    │     │ data/*.csv bundled at build  │
+            │  setup: data/*.csv (read)               │     │ data/*.csv bundled at build  │
+            │  activity: data/local/*.csv (read+write)│     │                              │
             └─────────────────────────────────────────┘     │ + activity in localStorage   │
                                                             └──────────────────────────────┘
 ```
 
 - **Every call re-reads the CSVs**, so hand edits take effect immediately.
   At mockup scale (a few hundred rows) this costs well under a millisecond.
+- **Two layers.** `data/` is committed: setup tables plus the shared starting
+  state of the activity tables. The server writes activity only to
+  `data/local/`, a git-ignored working copy seeded from `data/`. Testing
+  therefore never produces diffs or merge conflicts. Sharing a state is a
+  deliberate `npm run data:save` and commit. In browser mode, localStorage plays
+  the working-copy role.
 - **Setup tables are never written** by the app; only activity tables are.
   Writes go to a temp file that is then renamed into place, so a crash can’t
   leave a half-written CSV.

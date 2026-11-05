@@ -10,7 +10,8 @@ import type { MockupHost } from './types';
  *  - setup tables (people, circles, settings, rewards, auto replies) come
  *    from the CSV files bundled at build time, i.e. data/ in the repo;
  *  - activity tables start from those files and are then kept in this
- *    browser's localStorage, still as CSV text, so they can be downloaded.
+ *    browser's localStorage, still as CSV text, so they can be downloaded;
+ *    "reset" forgets them, which brings back the starting state from data/.
  *
  * Tabs and the WebView iframe on the same origin share the data and stay in
  * sync through storage events.
@@ -52,6 +53,18 @@ export function createBrowserMockup(options: { files: CsvFiles; storageKey?: str
           ls()?.setItem(prefix + f, text);
         } catch {
           /* private mode or full: memory copy still works for this tab */
+        }
+      }
+      notify();
+    },
+    /** Forget this browser's activity, so the bundled data/ starting state shows again. */
+    reset() {
+      for (const f of ACTIVITY_FILES) {
+        delete memory[f];
+        try {
+          ls()?.removeItem(prefix + f);
+        } catch {
+          /* nothing stored */
         }
       }
       notify();

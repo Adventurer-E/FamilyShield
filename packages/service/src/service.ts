@@ -28,14 +28,20 @@ import { emptyActivity, readDatabase, writeActivity } from './database';
 import type { CsvFiles, Database } from './database';
 
 /**
- * Where the CSV files live. The Node server reads/writes data/ on disk; the
- * browser build keeps the activity tables in localStorage.
+ * Where the CSV files live. Setup tables always come from the shared, committed
+ * data/ folder. Activity tables come from a working copy: data/local/ on disk
+ * for the Node server (git-ignored), localStorage in the browser build.
  */
 export interface CsvStorage {
   /** Every table, setup and activity, as CSV text keyed by file name. */
   read(): CsvFiles;
   /** Called with the activity tables only; setup tables are never rewritten. */
   write(activity: CsvFiles): void;
+  /**
+   * Put the working copy back to the shared starting state in data/.
+   * Without it, reset empties the activity tables.
+   */
+  reset?(): void;
 }
 
 export interface ServiceOptions {
@@ -218,9 +224,10 @@ export class FamilyShieldService {
     return changed;
   }
 
-  /** Clear all activity tables (setup tables are untouched). */
+  /** Back to the shared starting state (setup tables are untouched). */
   reset(): void {
-    this.storage.write(emptyActivity());
+    if (this.storage.reset) this.storage.reset();
+    else this.storage.write(emptyActivity());
   }
 
   people(): MockupPerson[] {

@@ -186,13 +186,13 @@ export function App() {
           </ol>
           <p>
             Every number comes from the <strong>CSV files</strong> in <code>data/</code>: people, balances, the fee, limits, points and
-            rewards. Change them and the app follows. {host.mode === 'server' ? 'The backend server writes new activity back to those files.' : 'Here, new activity is saved in this browser; use the Data button to download it.'}
+            rewards. Change them and the app follows. {host.mode === 'server' ? 'The backend server writes your activity to a git-ignored working copy in data/local/.' : 'Here, new activity is saved in this browser; use the Data button to download it.'}
           </p>
           <p>
             <strong>Inline SDK</strong> mounts the module straight into the bank’s page. <strong>WebView</strong> loads the standalone embed page
             in a frame and talks over postMessage, exactly like a native iOS/Android app would.
           </p>
-          <p className="fine">All people, partners and money here are fictional. “Reset functional mockup” clears all activity.</p>
+          <p className="fine">All people, partners and money here are fictional. “Reset functional mockup” goes back to the shared starting state in data/.</p>
         </aside>
       </div>
 
