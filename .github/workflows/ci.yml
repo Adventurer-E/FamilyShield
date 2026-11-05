@@ -1,12 +1,17 @@
 name: CI
 
+# Continuous integration: every pull request and every push to main must pass
+# these before merging (branch protection requires the "Checks" job).
+# Run the same thing locally with: npm run check
+
 on:
   push:
     branches: [main]
   pull_request:
 
 jobs:
-  check:
+  checks:
+    name: Checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,5 +26,7 @@ jobs:
         run: npm run typecheck
       - name: Test
         run: npm test
+      - name: Test ticket automation
+        run: npm run test:automation
       - name: Build
         run: npm run build
