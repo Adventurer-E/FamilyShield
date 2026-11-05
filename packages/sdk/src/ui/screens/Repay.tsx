@@ -87,7 +87,7 @@ export function Repay({ loan }: { loan: LoanCase }) {
           <Button onClick={pay}>Pay {formatMoney(next.amount)} now</Button>
           {demo ? (
             <Button variant="ghost" onClick={payAll}>
-              Demo: make all remaining payments
+              Functional mockup: make all remaining payments
             </Button>
           ) : null}
 
@@ -116,7 +116,7 @@ export function Repay({ loan }: { loan: LoanCase }) {
           {pause?.status === 'declined' ? (
             <div className="fs-tiny fs-muted">Your last pause request wasn’t approved. Your schedule is unchanged.</div>
           ) : null}
-          {pause?.status === 'pending' ? <DemoHint>Switch users in the demo bar to answer the pause as a lender.</DemoHint> : null}
+          {pause?.status === 'pending' ? <DemoHint>Switch users in the functional mockup bar to answer the pause as a lender.</DemoHint> : null}
         </section>
       ) : null}
 

@@ -81,7 +81,7 @@ export function App() {
     <div className="demo">
       <header className="demo-bar">
         <div className="demo-brand">
-          FamilyShield <span>demo</span>
+          FamilyShield <span>functional mockup</span>
         </div>
         <div className="seg" role="group" aria-label="Viewing as">
           <span className="seg-label">Viewing as</span>
@@ -104,7 +104,7 @@ export function App() {
             setOpen(false);
           }}
         >
-          Reset demo
+          Reset functional mockup
         </button>
       </header>
 
@@ -150,7 +150,7 @@ export function App() {
             <strong>Inline SDK</strong> mounts the module straight into the bank’s page. <strong>WebView</strong> loads the standalone embed page
             in a frame and talks over postMessage, exactly like a native iOS/Android app would.
           </p>
-          <p className="fine">All people, partners and money here are fictional. State is saved in this browser; “Reset demo” starts over.</p>
+          <p className="fine">All people, partners and money here are fictional. State is saved in this browser; “Reset functional mockup” starts over.</p>
         </aside>
       </div>
     </div>

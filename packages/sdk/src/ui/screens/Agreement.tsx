@@ -67,7 +67,7 @@ export function Agreement({ loan }: { loan: LoanCase }) {
           <Notice kind="info">
             You’ve signed. The money moves to your account as soon as {waitingOn.join(' and ') || 'everyone'} sign{waitingOn.length === 1 ? 's' : ''}.
           </Notice>
-          {waitingOn.length > 0 ? <DemoHint>To sign as a lender, switch users in the demo bar.</DemoHint> : null}
+          {waitingOn.length > 0 ? <DemoHint>To sign as a lender, switch users in the functional mockup bar.</DemoHint> : null}
           {loan.status === 'active' ? <Button onClick={() => go({ name: 'repay' }, { replace: true })}>See my repayment plan</Button> : null}
         </>
       ) : (

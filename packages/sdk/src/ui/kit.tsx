@@ -87,7 +87,7 @@ export function DemoHint({ children }: { children: ReactNode }) {
   if (!demo) return null;
   return (
     <Notice kind="demo">
-      <strong>Demo: </strong>
+      <strong>Functional mockup: </strong>
       {children}
     </Notice>
   );
