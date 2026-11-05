@@ -10,6 +10,7 @@ family circle for help privately, receive private offers, sign clear
 interest-free terms, and repay automatically, all without leaving their bank’s app.
 
 **▶ [Try the live functional mockup](https://adventurer-e.github.io/FamilyShield/)**: no install needed. It runs entirely in your browser.
+Every pull request also gets its own preview link, posted as a comment on the pull request.
 
 > **Status:** working prototype. Every person, bank, partner and dollar in this
 > repository is fictional.
