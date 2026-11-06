@@ -4,6 +4,9 @@ min_request,500,Smallest request in dollars
 max_request,5000,Largest request in dollars
 request_step,250,Requests go up and down in steps of this many dollars
 terms_months,6|10|12,Repayment terms a borrower can pick (separate with |)
+default_request,1500,Amount the request screen starts at in dollars (between min_request and max_request)
+default_term_months,10,Term the request screen starts at (must be one of terms_months)
+lender_offer_amounts,250|500|1000,Quick-pick offer amounts a lender sees in dollars (separate with |); only those up to the request show
 max_pauses,1,How many one-month pauses a borrower can ask for per loan
 points_per_helper,100,Family points for each relative who funds the loan
 points_per_on_time_payment,80,Family points for each payment made on or before its due date

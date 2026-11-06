@@ -4,31 +4,25 @@ import type { Reason } from '@familyshield/core';
 import { useFs } from '../context';
 import { Button, Notice, Screen } from '../kit';
 
-const REASONS: Array<{ id: Reason; label: string; template: string }> = [
-  { id: 'car', label: 'Car repair', template: 'My car broke down and I need it to get to work. The shop can fix it this week if I pay upfront.' },
-  { id: 'medical', label: 'Medical bill', template: 'An urgent-care visit left a bill my insurance didn’t fully cover, and it’s due this month.' },
-  { id: 'job', label: 'Job loss', template: 'I was laid off and need help covering rent and essentials while I look for a new job.' },
-  { id: 'other', label: 'Something else', template: 'An unexpected expense came up and I need a short bridge until my next paychecks.' },
-];
-
 export function Request() {
   const { api, run, go, emit, data } = useFs();
-  const { rules } = data.config;
+  // Reasons, limits and starting values all come from the data API (reasons.csv, settings.csv).
+  const { rules, reasons: REASONS } = data.config;
   const { amountMin: AMOUNT_MIN, amountMax: AMOUNT_MAX, amountStep: AMOUNT_STEP } = rules;
-  const [reason, setReason] = useState<Reason>('car');
-  const [purpose, setPurpose] = useState(REASONS[0]!.template);
+  const [reason, setReason] = useState<Reason>(() => REASONS[0]?.id ?? 'other');
+  const [purpose, setPurpose] = useState(() => REASONS[0]?.template ?? '');
   const [edited, setEdited] = useState(false);
-  // Start at $1,500 / 10 months when the rules allow it, else the nearest valid choice.
+  // Start at the default amount and term from settings.csv, snapped to the nearest valid choice.
   const [amount, setAmount] = useState(() => {
-    const clamped = Math.min(Math.max(150_000, AMOUNT_MIN), AMOUNT_MAX);
+    const clamped = Math.min(Math.max(rules.defaultAmount, AMOUNT_MIN), AMOUNT_MAX);
     return AMOUNT_MIN + Math.round((clamped - AMOUNT_MIN) / AMOUNT_STEP) * AMOUNT_STEP;
   });
-  const [months, setMonths] = useState<number>(() => (rules.terms.includes(10) ? 10 : rules.terms[0] ?? 6));
+  const [months, setMonths] = useState<number>(() => (rules.terms.includes(rules.defaultTerm) ? rules.defaultTerm : rules.terms[0] ?? 6));
 
   const pickReason = (id: Reason) => {
     setReason(id);
     // Swap in the new template unless the user has written their own words.
-    if (!edited) setPurpose(REASONS.find((r) => r.id === id)!.template);
+    if (!edited) setPurpose(REASONS.find((r) => r.id === id)?.template ?? '');
   };
 
   const send = async () => {

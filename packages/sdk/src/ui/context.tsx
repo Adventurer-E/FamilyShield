@@ -16,7 +16,7 @@ export type Route =
   | { name: 'lender'; loanId: string };
 
 export interface FsData {
-  /** Rules and rewards as the backend has them (data/settings.csv, data/rewards.csv). */
+  /** Rules, request reasons and rewards as the backend has them (data/settings.csv, data/reasons.csv, data/rewards.csv). */
   config: AppConfig;
   profile: Profile;
   myLoan: LoanCase | null;

@@ -241,6 +241,7 @@ export class FamilyShieldService {
     return {
       balance: person.openingBalance + mine.reduce((s, t) => s + t.amount, 0),
       transactions: mine.map(({ id, at, amount, memo }) => ({ id, at, amount, memo })).reverse(),
+      exampleTransactions: db.exampleTransactions.map((t) => ({ ...t })),
     };
   }
 
@@ -248,7 +249,7 @@ export class FamilyShieldService {
 
   config(): AppConfig {
     const db = this.open();
-    return { rules: db.rules, rewards: db.rewards };
+    return { rules: db.rules, reasons: db.reasons, rewards: db.rewards };
   }
 
   profile(userId: string): Profile {

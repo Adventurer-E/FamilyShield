@@ -4,7 +4,8 @@
 //   npm run data:save    Share your current state: copy data/local/ into data/, then review and commit it
 //   npm run data:status  Show which activity files differ between the two
 //
-// Setup tables (settings, people, circles, rewards, auto_replies) live only in
+// Setup tables (settings, people, circles, reasons, rewards, auto_replies,
+// example_transactions) live only in
 // data/; edit them there directly. These commands move the ACTIVITY tables.
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';

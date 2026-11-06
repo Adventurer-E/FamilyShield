@@ -25,7 +25,8 @@ developers and branches don't conflict over test data.
 If someone changes the shared starting state (you pull a commit that touches
 `data/`), the server warns you at startup and suggests `npm run data:reset`.
 
-Setup tables (settings, people, circles, rewards, auto replies) live **only** in
+Setup tables (settings, people, circles, reasons, rewards, auto replies, example
+transactions) live **only** in
 `data/`. Edit them there; the change applies on the next request.
 
 ## Where each mode reads from
@@ -65,6 +66,9 @@ Extra columns are ignored.
 | `min_request` / `max_request` | Request limits in dollars | `500` / `5000` |
 | `request_step` | Amount stepper increment in dollars | `250` |
 | `terms_months` | Terms a borrower can choose, separated by `\|` | `6\|10\|12` |
+| `default_request` | Amount the request screen starts at, in dollars (must be between `min_request` and `max_request`) | `1500` |
+| `default_term_months` | Term the request screen starts at (must be one of `terms_months`) | `10` |
+| `lender_offer_amounts` | Quick-pick amounts a lender sees when offering, in dollars, separated by `\|`. Only amounts up to the request are shown; a "The full $X" choice appears when the request is larger than all of them | `250\|500\|1000` |
 | `max_pauses` | One-month pauses allowed per loan | `1` |
 | `points_per_helper` | Points per relative who funds the loan | `100` |
 | `points_per_on_time_payment` | Points per on-time payment | `80` |
@@ -99,6 +103,20 @@ refers to them, e.g. "Mom"). A request goes to everyone in the borrower's circle
 
 Anyone not listed (Mom, in the default data) waits for a real person: switch to
 them in **Viewing as**.
+
+### `reasons.csv`: what can happen
+
+The "What happened?" choices on the request screen, in the order shown:
+`id` (one of `car`, `medical`, `job`, `other`; stored on the loan), `label`
+(the button text) and `template` (the description it pre-fills, which the
+borrower can rewrite). Remove a row to hide that choice. If the file is
+missing, the built-in four are used.
+
+### `example_transactions.csv`: everyday bank activity
+
+Rows shown under the FamilyShield postings on the bank home, for realism only:
+`id`, `date` (`YYYY-MM-DD`), `name`, `category` and `amount` (+ in, − out).
+Everyone sees the same rows, and they are **not** counted in any balance.
 
 ### `rewards.csv`: partner offers
 

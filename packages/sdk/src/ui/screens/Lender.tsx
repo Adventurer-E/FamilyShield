@@ -1,20 +1,19 @@
 import { useState } from 'react';
-import { formatDate, formatMoney, lenderSummary } from '@familyshield/core';
+import { DEFAULT_REASONS, formatDate, formatMoney, lenderSummary } from '@familyshield/core';
 import type { LoanCase } from '@familyshield/core';
 import { useFs } from '../context';
 import { Avatar, Button, Notice, Progress, Screen } from '../kit';
 import { CheckIcon } from '../icons';
 import { AgreementDoc } from './Agreement';
 
-const REASON_LABEL: Record<LoanCase['reason'], string> = {
-  car: 'Car repair',
-  medical: 'Medical bill',
-  job: 'Job loss',
-  other: 'Something else',
-};
-
 function RequestSummary({ loan }: { loan: LoanCase }) {
-  const { nameOf, fullNameOf } = useFs();
+  const { nameOf, fullNameOf, data } = useFs();
+  // Same labels as the borrower's "What happened?" chips (data/reasons.csv).
+  // Falls back to the built-in label if that reason was since removed from the file.
+  const reasonLabel =
+    data.config.reasons.find((r) => r.id === loan.reason)?.label ??
+    DEFAULT_REASONS.find((r) => r.id === loan.reason)?.label ??
+    loan.reason;
   return (
     <section className="fs-card">
       <div className="fs-row">
@@ -23,7 +22,7 @@ function RequestSummary({ loan }: { loan: LoanCase }) {
           <div style={{ fontWeight: 800 }}>{fullNameOf(loan.borrowerId)}</div>
           <div className="fs-small fs-muted">Asked their circle for support</div>
         </div>
-        <span className="fs-pill warn">{REASON_LABEL[loan.reason]}</span>
+        <span className="fs-pill warn">{reasonLabel}</span>
       </div>
       <div className="fs-big">{formatMoney(loan.amount)}</div>
       <p className="fs-small" style={{ margin: 0, color: '#3B4659' }}>{loan.purpose}</p>
@@ -36,9 +35,12 @@ function RequestSummary({ loan }: { loan: LoanCase }) {
 
 /** A circle member answers a request privately. */
 export function Respond({ loan }: { loan: LoanCase }) {
-  const { api, run, nameOf } = useFs();
+  const { api, run, nameOf, data } = useFs();
   const mine = loan.offers[0];
-  const presets = [25_000, 50_000, 100_000].filter((v) => v <= loan.amount);
+  // Quick-pick amounts from settings.csv (lender_offer_amounts), up to the request.
+  const { offerAmounts } = data.config.rules;
+  const presets = offerAmounts.filter((v) => v <= loan.amount);
+  const largestPreset = Math.max(0, ...offerAmounts);
   const [amount, setAmount] = useState(presets[presets.length - 1] ?? loan.amount);
   const [note, setNote] = useState('');
   const who = nameOf(loan.borrowerId);
@@ -63,7 +65,7 @@ export function Respond({ loan }: { loan: LoanCase }) {
                 </button>
               ))}
             </div>
-            {loan.amount > 100_000 ? (
+            {loan.amount > largestPreset ? (
               <button type="button" className="fs-chip" aria-pressed={amount === loan.amount} onClick={() => setAmount(loan.amount)}>
                 The full {formatMoney(loan.amount)}
               </button>
