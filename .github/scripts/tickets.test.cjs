@@ -18,6 +18,11 @@ function fakeGitHub() {
     admins: [], // logins with admin permission
     prCommits: {}, // commit sha → [pull requests]
     reruns: [],
+    // Review gate runs on a pull request's commit, one per triggering event (see rerunReviewGate).
+    workflowRuns: [{ id: 77, event: 'pull_request', status: 'completed', conclusion: 'failure', created_at: '2026-11-05T07:00:00Z' }],
+    checks: {}, // commit sha → check runs ({ name, status, conclusion })
+    merges: [], // { pull, sha, method }
+    dispatches: [], // { workflow, ref, inputs }
     clock: 0, // fake time: every review, comment and commit gets the next minute
     headTimes: {}, // head sha → commit time
     requested: [], // { pull, reviewers }
@@ -74,8 +79,12 @@ function fakeGitHub() {
       getCommit: async ({ ref }) => ok({ commit: { committer: { date: state.headTimes[ref] || '2026-11-05T07:00:00.000Z' } } }),
     },
     actions: {
-      listWorkflowRuns: async () => ok({ workflow_runs: [{ id: 77 }] }),
+      listWorkflowRuns: async () => ok({ workflow_runs: state.workflowRuns }),
       reRunWorkflow: async ({ run_id }) => { state.reruns.push(run_id); return ok({}); },
+      createWorkflowDispatch: async ({ workflow_id, ref, inputs }) => { state.dispatches.push({ workflow: workflow_id, ref, inputs }); return ok({}); },
+    },
+    checks: {
+      listForRef: async ({ ref }) => ok(typeof state.checks[ref] === 'function' ? state.checks[ref]() : state.checks[ref] || []),
     },
     pulls: {
       list: async () => ok(Object.values(state.pulls).filter((p) => p.state === 'open')),
@@ -83,6 +92,13 @@ function fakeGitHub() {
       update: async ({ pull_number, body }) => { state.pulls[pull_number].body = body; return ok({}); },
       requestReviewers: async ({ pull_number, reviewers }) => { state.requested.push({ pull: pull_number, reviewers }); return ok({}); },
       listReviews: async ({ pull_number }) => ok(state.reviews[pull_number] || []),
+      merge: async ({ pull_number, sha, merge_method }) => {
+        const p = state.pulls[pull_number];
+        if (p.merged) throw Object.assign(new Error('Pull Request is not mergeable'), { status: 405 });
+        Object.assign(p, { merged: true, state: 'closed', merged_by: { login: 'github-actions[bot]' } });
+        state.merges.push({ pull: pull_number, sha, method: merge_method });
+        return ok({ merged: true });
+      },
     },
   };
   const github = {
@@ -101,7 +117,7 @@ function fakeGitHub() {
     },
     openPull({ head, body = '', by, draft = false }) {
       const n = state.next++;
-      state.pulls[n] = { number: n, head: { ref: head, sha: `sha-${n}` }, body, user: { login: by }, draft, state: 'open', merged: false };
+      state.pulls[n] = { number: n, head: { ref: head, sha: `sha-${n}` }, base: { ref: 'main' }, body, user: { login: by }, draft, state: 'open', merged: false };
       state.headTimes[`sha-${n}`] = tick();
       state.issues[n] = { number: n, node_id: `PR_${n}`, title: 'pr', body, labels: [], assignees: [], state: 'open', pull_request: {} };
       return state.pulls[n];
@@ -235,23 +251,25 @@ describe('a ticket from icebox to done', () => {
     assert.equal((await bot.reviewGate(gh.state.pulls[pr.number])).ok, false);
     gh.review(pr, 'ann', 'APPROVED');
     await bot.onReview(gh.state.pulls[pr.number], { user: { login: 'ann' }, state: 'approved' });
-    assert.equal(gh.status(1), 'reviewed');
+    assert.equal(gh.status(1), 'done'); // approved, checks green → merged right away
     assert.deepEqual(await bot.reviewGate(gh.state.pulls[pr.number]), { ok: true, message: 'Approved by the ticket reviewer.' });
-    assert.ok(gh.commentsOn(pr.number).some((c) => /@ann, you're the reviewer/.test(c)));
+    assert.ok(gh.commentsOn(pr.number).some((c) => /Approved by @ann, the ticket’s reviewer\. It merges automatically/.test(c)));
 
-    // 5. Ann merges.
-    await bot.onPullRequest({ ...gh.state.pulls[pr.number], merged: true, merged_by: { login: 'ann' } }, 'closed');
+    // 5. The checks are green, so the bot merges right away.
+    assert.deepEqual(gh.state.merges, [{ pull: pr.number, sha: `sha-${pr.number}`, method: 'merge' }]);
     assert.equal(gh.status(1), 'done');
+    assert.ok(gh.commentsOn(pr.number).some((c) => /Merged automatically\*\*: approved by the ticket reviewer, and every check passed/.test(c)));
     assert.ok(!gh.state.issues[pr.number].labels.some((l) => l.name === 'merge rule broken'));
   });
 
   test('changes requested sends it back to in progress; new commits after approval need a new review', async () => {
     const gh = fakeGitHub();
-    const bot = new t.TicketBot({ github: gh.github, context, core: silentCore() });
+    const bot = new t.TicketBot({ github: gh.github, context, core: silentCore(), mergeWaitMs: 0, sleep: async () => {} });
     gh.openIssue({ title: 'Fix typo', body: '### Reviewer\n\n@ann' });
     await bot.onIssueOpened(await bot.getIssue(1));
     await bot.onIssueComment(await bot.getIssue(1), '/start', 'bob');
     const pr = gh.openPull({ head: 'ticket/1-fix-typo', by: 'bob' });
+    gh.state.checks[pr.head.sha] = [{ name: 'Checks', status: 'in_progress' }]; // CI still running: no merge yet
     await bot.onPullRequest(pr, 'opened');
 
     gh.review(pr, 'ann', 'CHANGES_REQUESTED');
@@ -275,7 +293,7 @@ describe('a ticket from icebox to done', () => {
     await bot.onPullRequest({ ...pr, merged: true, merged_by: { login: 'bob' } }, 'closed');
     assert.equal(gh.status(1), 'done');
     assert.ok(gh.state.issues[pr.number].labels.some((l) => l.name === 'merge rule broken'));
-    assert.ok(gh.commentsOn(pr.number).some((c) => /merged by @bob/.test(c)));
+    assert.ok(gh.commentsOn(pr.number).some((c) => /merged by hand by @bob/.test(c)));
   });
 
   test('a pull request without a ticket is told so, and the gate fails', async () => {
@@ -422,7 +440,7 @@ describe('rule exceptions', () => {
     gh.say(pr.number, 'bob', '/self-approve Production is down and Ann is on a flight');
     await bot.onIssueComment(prIssue(gh, pr), '/self-approve Production is down and Ann is on a flight', 'bob');
     assert.ok(prIssue(gh, pr).labels.some((l) => l.name === 'rule exception'));
-    assert.equal(gh.status(1), 'reviewed');
+    assert.equal(gh.status(1), 'done'); // approved, checks green → merged right away
     assert.deepEqual(gh.state.reruns, [77], 'the Review gate is re-run');
     assert.ok(gh.commentsOn(pr.number).some((c) => /Rule exception recorded/.test(c)));
     assert.deepEqual(await bot.reviewGate(gh.state.pulls[pr.number]), { ok: true, message: 'Rule exception recorded by @bob: Production is down and Ann is on a flight' });
@@ -514,7 +532,7 @@ describe('assignees (who created the ticket doesn’t matter)', () => {
 
     gh.say(pr.number, 'ann', '/approve');
     await bot.onIssueComment(gh.state.issues[pr.number], '/approve', 'ann');
-    assert.equal(gh.status(1), 'reviewed');
+    assert.equal(gh.status(1), 'done'); // approved, checks green → merged right away
     assert.deepEqual(gh.state.reruns, [77]);
     assert.ok(!gh.state.issues[pr.number].labels.some((l) => l.name === 'rule exception'), 'not an exception');
     assert.deepEqual(await bot.reviewGate(gh.state.pulls[pr.number]), { ok: true, message: 'Approved by the ticket reviewer.' });
@@ -543,5 +561,111 @@ describe('assignees (who created the ticket doesn’t matter)', () => {
     await bot.onIssueComment(gh.state.issues[pr.number], '/approve', 'dee');
     assert.ok(gh.commentsOn(pr.number).some((c) => /only the ticket’s reviewer can `\/approve`/.test(c)));
     assert.equal((await bot.reviewGate(gh.state.pulls[pr.number])).ok, false, "dee isn't the reviewer");
+  });
+});
+
+describe('automatic merge after approval', () => {
+  // A ticket reviewed by Ann, worked on by Bob, with a pull request open.
+  async function setup(opts = {}) {
+    const gh = fakeGitHub();
+    const core = silentCore();
+    const naps = [];
+    const bot = new t.TicketBot({ github: gh.github, context, core, mergeWaitMs: opts.mergeWaitMs ?? 60_000, pollMs: 10_000, sleep: async (ms) => naps.push(ms) });
+    gh.openIssue({ title: 'Ship it', body: '### Reviewer\n\n@ann' });
+    await bot.onIssueOpened(await bot.getIssue(1));
+    await bot.onIssueComment(await bot.getIssue(1), '/start', 'bob');
+    const pr = gh.openPull({ head: 'ticket/1-ship-it', by: 'bob', draft: opts.draft });
+    await bot.onPullRequest(structuredClone(pr), 'opened');
+    const approve = async () => {
+      gh.review(pr, 'ann', 'APPROVED');
+      await bot.onReview(gh.state.pulls[pr.number], { user: { login: 'ann' }, state: 'approved' });
+    };
+    return { gh, bot, core, pr, naps, approve };
+  }
+
+  test('the Approve button re-runs the out-of-date red Review gate, not the new green one', async () => {
+    const { gh, pr, approve } = await setup();
+    gh.state.workflowRuns = [
+      { id: 77, event: 'pull_request', status: 'completed', conclusion: 'failure', created_at: '2026-11-05T14:32:33Z' },
+      { id: 70, event: 'pull_request', status: 'completed', conclusion: 'failure', created_at: '2026-11-05T14:21:22Z' }, // older, same event
+      { id: 78, event: 'pull_request_review', status: 'completed', conclusion: 'success', created_at: '2026-11-06T17:25:23Z' },
+    ];
+    await approve();
+    assert.deepEqual(gh.state.reruns, [77]);
+    assert.equal(gh.state.merges.length, 1);
+    assert.equal(gh.state.merges[0].pull, pr.number);
+  });
+
+  test('waits for running checks, then merges and does what a merge would have started', async () => {
+    const { gh, pr, naps, approve } = await setup();
+    let looks = 0;
+    gh.state.checks[pr.head.sha] = () => {
+      looks++;
+      return [
+        { name: 'tickets', status: 'in_progress' }, // the bot itself: ignored
+        { name: 'Review gate', status: 'completed', conclusion: looks < 2 ? 'failure' : 'success' }, // being re-run
+        { name: 'Checks', status: looks < 3 ? 'in_progress' : 'completed', conclusion: looks < 3 ? null : 'success' },
+        { name: 'deploy', status: 'completed', conclusion: 'success' },
+      ];
+    };
+    await approve();
+    assert.equal(looks, 3);
+    assert.deepEqual(naps, [10_000, 10_000]);
+    assert.equal(gh.state.merges.length, 1);
+    assert.equal(gh.status(1), 'done');
+    assert.deepEqual(gh.state.dispatches, [
+      { workflow: 'ci.yml', ref: 'main', inputs: {} },
+      { workflow: 'pages.yml', ref: 'main', inputs: { remove_preview: String(pr.number) } },
+    ]);
+  });
+
+  test('checks still running after the wait: merged when they finish', async () => {
+    const { gh, bot, pr, approve } = await setup({ mergeWaitMs: 0 });
+    gh.state.checks[pr.head.sha] = [{ name: 'Checks', status: 'in_progress' }];
+    await approve();
+    assert.equal(gh.state.merges.length, 0);
+    assert.equal(gh.status(1), 'reviewed');
+
+    gh.state.checks[pr.head.sha] = [{ name: 'Checks', status: 'completed', conclusion: 'success' }];
+    await t.main({ github: gh.github, core: silentCore(), context: { ...context, eventName: 'workflow_run', payload: { workflow_run: { status: 'completed', head_sha: pr.head.sha, pull_requests: [{ number: pr.number, head: { sha: pr.head.sha } }] } } } });
+    assert.equal(gh.state.merges.length, 1);
+    assert.equal(gh.status(1), 'done');
+    await bot.onWorkflowRun({ status: 'completed', head_sha: pr.head.sha, pull_requests: [{ number: pr.number }] });
+    assert.equal(gh.state.merges.length, 1, 'only merged once');
+  });
+
+  test('a failed check stops the merge and says why', async () => {
+    const { gh, pr, approve } = await setup();
+    gh.state.checks[pr.head.sha] = [{ name: 'Checks', status: 'completed', conclusion: 'failure' }];
+    await approve();
+    assert.equal(gh.state.merges.length, 0);
+    assert.ok(gh.commentsOn(pr.number).some((c) => /not merged: \*\*Checks\*\* failed/.test(c)));
+  });
+
+  test('no merge without approval, for drafts, or when a commit lands while waiting', async () => {
+    let s = await setup();
+    await s.bot.onWorkflowRun({ status: 'completed', head_sha: s.pr.head.sha, pull_requests: [{ number: s.pr.number }] });
+    assert.equal(s.gh.state.merges.length, 0, 'CI finishing alone does not merge');
+
+    s = await setup({ draft: true });
+    await s.approve();
+    assert.equal(s.gh.state.merges.length, 0, 'drafts are held');
+
+    s = await setup();
+    const { gh, pr } = s;
+    let looks = 0;
+    gh.state.checks[pr.head.sha] = () => {
+      if (++looks === 1) return [{ name: 'Checks', status: 'in_progress' }];
+      gh.push(pr); // Bob pushes again while CI runs
+      return [];
+    };
+    await s.approve();
+    assert.equal(gh.state.merges.length, 0, 'the new commit was never approved');
+  });
+
+  test('a bot merge is not flagged; a merge by hand by someone else still is', async () => {
+    const { gh, bot, pr } = await setup();
+    await bot.onPullRequest({ ...gh.state.pulls[pr.number], merged: true, merged_by: { login: 'github-actions[bot]' } }, 'closed');
+    assert.ok(!gh.state.issues[pr.number].labels.some((l) => l.name === 'merge rule broken'));
   });
 });
