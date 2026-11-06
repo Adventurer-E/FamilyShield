@@ -1,7 +1,7 @@
 // Ticket automation for the FamilyShield Kanban workflow.
 //
 //   Icebox ──/start──▶ In progress ──PR opened──▶ Under review ──approved──▶ Reviewed ──merged──▶ Done
-//                        (branch created)          (reviewers requested)     (reviewer merges)
+//                        (branch created)          (reviewers requested)     (bot merges once checks pass)
 //
 // Status is stored twice, kept in sync by this script:
 //   * a label on the issue ("status: in progress"), which works without any setup
@@ -18,7 +18,7 @@ const STATUSES = [
   { key: 'icebox', label: 'status: icebox', board: 'Icebox', color: 'c5def5', description: 'Ticket not started yet' },
   { key: 'in-progress', label: 'status: in progress', board: 'In progress', color: 'fbca04', description: 'Someone is working on it; a branch exists' },
   { key: 'under-review', label: 'status: under review', board: 'Under review', color: 'd4c5f9', description: 'Pull request open; waiting for the reviewer' },
-  { key: 'reviewed', label: 'status: reviewed', board: 'Reviewed', color: '0e8a16', description: 'Approved; the reviewer merges it' },
+  { key: 'reviewed', label: 'status: reviewed', board: 'Reviewed', color: '0e8a16', description: 'Approved; merges automatically once the checks pass' },
   { key: 'done', label: 'status: done', board: 'Done', color: '5319e7', description: 'Merged into main' },
 ];
 const EXTRA_LABELS = [
@@ -34,6 +34,9 @@ const RULES = {
   directPush:
     'In principle, every change reaches `main` through a ticket branch and a reviewed pull request. Only in an emergency or other extenuating circumstances, or as a repository administrator, may someone push to `main` directly.',
 };
+
+/** This bot's own job (tickets.yml), left out when it looks at a pull request's checks. */
+const SELF_CHECK = 'tickets';
 
 const norm = (s) => String(s || '').toLowerCase().replace(/[\s_-]+/g, ' ').trim();
 const byKey = (key) => STATUSES.find((s) => s.key === key);
@@ -185,11 +188,11 @@ const HELP = [
   '| `/status icebox` · `in progress` · `under review` · `reviewed` | Set the status by hand (you can also drag the card on the board) |',
   '| `/help` | Show this list |',
   '',
-  'Anyone can create a ticket, assign it, change the assignee or assign themselves. Who created a ticket doesn’t matter; the **assignee** does the work and the **reviewer** reviews and merges it.',
+  'Anyone can create a ticket, assign it, change the assignee or assign themselves. Who created a ticket doesn’t matter; the **assignee** does the work and the **reviewer** reviews it. Once the reviewer approves and every check is green, the pull request **merges automatically** (to hold it, keep it as a draft).',
   '',
   'On a **pull request**: the reviewer can comment `/approve` (same as the Approve button, which GitHub hides from whoever opened the pull request). `/self-approve <reason>` records a rule exception when the assignee must also review the work (emergencies, or administrators).',
   '',
-  'Status moves on its own, too: opening a pull request → **Under review** (reviewers are notified), approval → **Reviewed**, merge → **Done**.',
+  'Status moves on its own, too: opening a pull request → **Under review** (reviewers are notified), approval → **Reviewed**, automatic merge → **Done**.',
 ].join('\n');
 
 // ------------------------------------------------------------------ the bot
@@ -201,12 +204,18 @@ class TicketBot {
    * @param {object} o.context  @actions/github context
    * @param {object} o.core     @actions/core
    * @param {object} [o.board]  optional Board (Projects v2); null when not configured
+   * @param {number} [o.mergeWaitMs]  how long an approval waits for running checks before leaving it to their completion
+   * @param {number} [o.pollMs]  how often it looks at the checks while waiting
+   * @param {function} [o.sleep]  (ms) => Promise, replaceable in tests
    */
-  constructor({ github, context, core, board }) {
+  constructor({ github, context, core, board, mergeWaitMs = 4 * 60_000, pollMs = 10_000, sleep }) {
     this.github = github;
     this.context = context;
     this.core = core;
     this.board = board || null;
+    this.mergeWaitMs = mergeWaitMs;
+    this.pollMs = pollMs;
+    this.sleep = sleep || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.repo = context.repo; // { owner, repo }
     this.repoUrl = `${context.serverUrl || 'https://github.com'}/${context.repo.owner}/${context.repo.repo}`;
   }
@@ -425,8 +434,8 @@ class TicketBot {
     }
     await this.github.rest.issues.addLabels({ ...this.repo, issue_number: prNumber, labels: ['rule exception'] });
     for (const issue of issues) await this.setStatus(issue, 'reviewed', { quiet: true });
-    await this.comment(prNumber, `🟠 **Rule exception recorded** by @${actor} (${who.as}): “${reason}”\n\n${RULES.selfReview} This exception is kept on the pull request and its \`rule exception\` label. The Review gate will now pass.`);
-    await this.rerunReviewGate(pr);
+    await this.comment(prNumber, `🟠 **Rule exception recorded** by @${actor} (${who.as}): “${reason}”\n\n${RULES.selfReview} This exception is kept on the pull request and its \`rule exception\` label. The Review gate will now pass, and the pull request merges automatically once every check is green.`);
+    await this.autoMerge(prNumber);
   }
 
   /**
@@ -444,18 +453,117 @@ class TicketBot {
       return this.comment(prNumber, `⚠️ @${actor}, you’re both the assignee and the reviewer, so your approval doesn’t count on its own. ${RULES.selfReview}`);
     }
     for (const issue of issues) await this.setStatus(issue, 'reviewed', { quiet: true });
-    await this.comment(prNumber, `✅ Approved by @${actor}, the ticket’s reviewer. @${actor}, please **merge** when the checks are green.`);
-    await this.rerunReviewGate(pr);
+    await this.comment(prNumber, `✅ Approved by @${actor}, the ticket’s reviewer. It merges automatically once every check is green.`);
+    await this.autoMerge(prNumber);
   }
 
-  /** Re-run the latest Review gate check for the pull request's current commit. */
+  /**
+   * Re-run Review gate results that are out of date on the pull request's current commit.
+   * GitHub keeps one result per triggering event (pull request opened/updated, review, …), and a
+   * red one from before the approval keeps blocking the merge even after a newer one turns green.
+   */
   async rerunReviewGate(pr) {
     try {
-      const { data } = await this.github.rest.actions.listWorkflowRuns({ ...this.repo, workflow_id: 'review-gate.yml', head_sha: pr.head.sha, per_page: 1 });
-      const run = data.workflow_runs && data.workflow_runs[0];
-      if (run) await this.github.rest.actions.reRunWorkflow({ ...this.repo, run_id: run.id });
+      const { data } = await this.github.rest.actions.listWorkflowRuns({ ...this.repo, workflow_id: 'review-gate.yml', head_sha: pr.head.sha, per_page: 20 });
+      const latestPerEvent = new Map();
+      for (const run of data.workflow_runs || []) {
+        const prev = latestPerEvent.get(run.event);
+        if (!prev || String(run.created_at || '') > String(prev.created_at || '')) latestPerEvent.set(run.event, run);
+      }
+      for (const run of latestPerEvent.values()) {
+        if (run.status === 'completed' && run.conclusion !== 'success') {
+          await this.github.rest.actions.reRunWorkflow({ ...this.repo, run_id: run.id });
+          this.log(`re-ran Review gate run ${run.id} (${run.event})`);
+        }
+      }
     } catch (e) {
       this.core.warning(`Couldn't re-run the Review gate (${e.message}); it updates on the next push or review.`);
+    }
+  }
+
+  /**
+   * The checks on a commit, ignoring this bot's own job: which are still running, and which failed.
+   * A red Review gate counts as "still running" here, because the bot has just re-run it.
+   */
+  async checksOn(sha) {
+    const runs = await this.github.paginate(this.github.rest.checks.listForRef, { ...this.repo, ref: sha, per_page: 100 });
+    const pending = [];
+    const failed = [];
+    for (const run of runs) {
+      if (run.name === SELF_CHECK) continue;
+      const passed = run.status === 'completed' && ['success', 'neutral', 'skipped'].includes(run.conclusion);
+      if (passed) continue;
+      if (run.status !== 'completed' || run.name === 'Review gate') pending.push(run.name);
+      else failed.push(run.name);
+    }
+    return { pending: [...new Set(pending)], failed: [...new Set(failed)] };
+  }
+
+  /**
+   * Merge the pull request once the ticket's reviewer has approved and every check is green.
+   * Checks still running after `mergeWaitMs`: left alone; the run started when CI finishes tries again.
+   */
+  async autoMerge(prNumber) {
+    let pr = (await this.github.rest.pulls.get({ ...this.repo, pull_number: prNumber })).data;
+    if (pr.state !== 'open' || pr.merged || pr.draft) return this.log(`#${prNumber}: not merging (closed or draft)`);
+    if (pr.head.repo && pr.base.repo && pr.head.repo.full_name !== pr.base.repo.full_name) return this.log(`#${prNumber}: not merging a fork`);
+    const gate = await this.reviewGate(pr);
+    if (!gate.ok) return this.log(`#${prNumber}: not merging yet (${gate.message})`);
+    await this.rerunReviewGate(pr);
+
+    const started = Date.now();
+    for (;;) {
+      const { pending, failed } = await this.checksOn(pr.head.sha);
+      if (failed.length) {
+        return this.comment(prNumber, `⚠️ Approved, but not merged: ${failed.map((n) => `**${n}**`).join(', ')} failed. Push a fix; the reviewer then approves again and it merges.`);
+      }
+      if (!pending.length) break;
+      if (Date.now() - started >= this.mergeWaitMs) return this.log(`#${prNumber}: still waiting for ${pending.join(', ')}; will merge when they finish`);
+      await this.sleep(this.pollMs);
+    }
+
+    // Look again right before merging: a new commit after the approval must not slip in.
+    const headSha = pr.head.sha;
+    pr = (await this.github.rest.pulls.get({ ...this.repo, pull_number: prNumber })).data;
+    if (pr.state !== 'open' || pr.merged || pr.draft || pr.head.sha !== headSha) return this.log(`#${prNumber}: changed while waiting; not merging`);
+    try {
+      await this.github.rest.pulls.merge({ ...this.repo, pull_number: prNumber, sha: headSha, merge_method: 'merge' });
+    } catch (e) {
+      const again = (await this.github.rest.pulls.get({ ...this.repo, pull_number: prNumber })).data;
+      if (again.merged) return this.log(`#${prNumber}: already merged`);
+      return this.comment(prNumber, `⚠️ Approved and green, but GitHub didn’t let the bot merge it: ${e.message}. Please merge it by hand.`);
+    }
+    this.log(`#${prNumber}: merged`);
+    await this.afterAutoMerge(pr, gate.message);
+  }
+
+  /**
+   * GitHub starts no workflows for a merge made by the bot, so do their work here:
+   * move the tickets to Done, run CI and the Pages site for main, and remove the preview.
+   */
+  async afterAutoMerge(pr, why) {
+    const reason = why.replace(/\.$/, '');
+    await this.comment(pr.number, `🤖 **Merged automatically**: ${reason.charAt(0).toLowerCase()}${reason.slice(1)}, and every check passed.`);
+    for (const issue of await this.issuesFor(pr)) await this.setStatus(issue, 'done', { quiet: true });
+    const dispatches = [
+      { workflow_id: 'ci.yml', inputs: {} },
+      { workflow_id: 'pages.yml', inputs: { remove_preview: String(pr.number) } },
+    ];
+    for (const d of dispatches) {
+      try {
+        await this.github.rest.actions.createWorkflowDispatch({ ...this.repo, ref: pr.base.ref || 'main', ...d });
+      } catch (e) {
+        this.core.warning(`Couldn't start ${d.workflow_id} after the merge (${e.message}).`);
+      }
+    }
+  }
+
+  /** CI (or another check) finished: merge the pull requests on that commit if they're approved. */
+  async onWorkflowRun(run) {
+    if (run.status !== 'completed') return;
+    for (const pr of run.pull_requests || []) {
+      if (pr.head && pr.head.sha && run.head_sha && pr.head.sha !== run.head_sha) continue;
+      await this.autoMerge(pr.number);
     }
   }
 
@@ -586,17 +694,19 @@ class TicketBot {
       await this.setStatus(issue, 'done', { quiet: true });
       const reviewers = parseMeta(issue.body).reviewers.map((r) => r.toLowerCase());
       const merger = pr.merged_by ? pr.merged_by.login : 'unknown';
-      if (!reviewers.includes(merger.toLowerCase())) {
+      const byBot = /\[bot\]$/.test(merger) || merger === 'github-actions'; // the automatic merge
+      if (!byBot && !reviewers.includes(merger.toLowerCase())) {
         await this.github.rest.issues.addLabels({ ...this.repo, issue_number: pr.number, labels: ['merge rule broken'] }).catch(() => {});
         await this.comment(
           pr.number,
-          `⚠️ Team rule: the ticket's reviewer (${reviewers.length ? reviewers.map((r) => `@${r}`).join(' ') : 'none set'}) merges. This was merged by @${merger}. No action needed now; just a reminder for next time.`,
+          `⚠️ Team rule: pull requests merge after the ticket's reviewer (${reviewers.length ? reviewers.map((r) => `@${r}`).join(' ') : 'none set'}) approves; the bot then merges them. This was merged by hand by @${merger}. No action needed now; just a reminder for next time.`,
         );
       }
     }
   }
 
   async onReview(pr, review) {
+    let approved = false;
     for (const issue of await this.issuesFor(pr)) {
       const reviewers = parseMeta(issue.body).reviewers.map((r) => r.toLowerCase());
       const who = review.user.login;
@@ -606,13 +716,15 @@ class TicketBot {
         await this.comment(pr.number, `⚠️ @${who} is both assignee and reviewer of #${issue.number}, so this approval doesn’t count on its own. ${RULES.selfReview}`);
       } else if (state === 'APPROVED') {
         await this.setStatus(issue, 'reviewed', { quiet: true });
-        await this.comment(pr.number, `✅ Approved by @${who}. @${who}, you're the reviewer, so please **merge** when the checks are green.`);
+        await this.comment(pr.number, `✅ Approved by @${who}, the ticket’s reviewer. It merges automatically once every check is green.`);
+        approved = true;
       } else if (state === 'CHANGES_REQUESTED') {
         await this.setStatus(issue, 'in-progress', { quiet: true });
         const assignees = (issue.assignees || []).map((a) => `@${a.login}`).join(' ') || `@${pr.user.login}`;
         await this.comment(issue.number, `✏️ @${who} requested changes on #${pr.number}. ${assignees}: back to **In progress**. Push your fixes and the reviewer will be asked again.`);
       }
     }
+    if (approved) await this.autoMerge(pr.number);
   }
 
   /** A push to main that didn't come from a merged pull request is recorded as a rule exception. */
@@ -882,6 +994,8 @@ async function main(args) {
     case 'pull_request_review':
       if (p.action === 'submitted') return bot.onReview(p.pull_request, p.review);
       return;
+    case 'workflow_run':
+      return bot.onWorkflowRun(p.workflow_run);
     case 'schedule':
     case 'workflow_dispatch':
       return bot.syncBoard();

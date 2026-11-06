@@ -17,7 +17,12 @@ on:
     branches: [main]
   pull_request:
     types: [opened, reopened, synchronize, closed]
-  workflow_dispatch:
+  workflow_dispatch: # also started by the ticket bot after it merges a pull request
+    inputs:
+      remove_preview:
+        description: Pull request number whose preview to remove (the bot sets this after merging)
+        required: false
+        default: ''
 
 permissions:
   contents: write # push to gh-pages
@@ -57,6 +62,24 @@ jobs:
           branch: gh-pages
           folder: apps/demo-bank/dist
           clean-exclude: pr-preview/
+
+      - name: Remove the preview of a pull request the ticket bot merged
+        # A merge by the bot doesn't send the "closed" event that normally removes it.
+        if: github.event_name == 'workflow_dispatch' && inputs.remove_preview != ''
+        env:
+          PR: ${{ inputs.remove_preview }}
+        run: |
+          [[ "$PR" =~ ^[0-9]+$ ]] || { echo "Not a pull request number: $PR"; exit 1; }
+          git fetch --depth 1 origin gh-pages
+          git worktree add --detach ../gh-pages FETCH_HEAD
+          cd ../gh-pages
+          if [ -d "pr-preview/pr-$PR" ]; then
+            git rm -rq "pr-preview/pr-$PR"
+            git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -qm "Remove preview for pull request #$PR"
+            git push origin HEAD:gh-pages
+          else
+            echo "No preview for #$PR"
+          fi
 
       - name: Publish or remove pull request preview
         if: github.event_name == 'pull_request'
