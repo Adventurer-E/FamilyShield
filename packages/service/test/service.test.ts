@@ -208,3 +208,116 @@ describe('the service over CSVs', () => {
     expect(svc.people()).toHaveLength(4);
   });
 });
+
+describe('the trusted circle', () => {
+  const ids = (people: Array<{ id: string }>) => people.map((p) => p.id);
+
+  it('lists the caller’s circle with their nicknames, same as the profile', () => {
+    const { svc } = setup();
+    expect(svc.circle('alex').map((p) => p.nickname)).toEqual(['Mom', 'Cousin Maya', 'Aunt Lisa']);
+    expect(svc.circle('alex')).toEqual(svc.profile('alex').circle);
+    expect(svc.circle('maya')).toEqual([]);
+  });
+
+  it('adds someone, writes it to circles.csv, and includes them in the next request', () => {
+    const { svc, storage } = setup();
+    const circle = svc.addCircleMember('mom', 'maya', '  Maya   Lin ');
+    expect(circle.at(-1)).toEqual({ id: 'maya', firstName: 'Maya', lastName: 'Lin', nickname: 'Maya Lin' });
+    expect(storage.files['circles.csv']).toContain('\nmom,maya,Maya Lin\n');
+    const loan = svc.createRequest('mom', { reason: 'car', purpose: 'x', amount: 100_000, months: 6 });
+    expect(loan.offers.map((o) => o.memberId)).toEqual(['alex', 'lisa', 'maya']);
+  });
+
+  it('adds without a nickname', () => {
+    const { svc } = setup();
+    expect(svc.addCircleMember('maya', 'lisa').at(-1)).toEqual({ id: 'lisa', firstName: 'Lisa', lastName: 'Park' });
+  });
+
+  it('won’t add yourself, someone twice, a stranger, or a very long nickname', () => {
+    const { svc } = setup();
+    expect(() => svc.addCircleMember('alex', 'alex')).toThrow(/yourself/);
+    expect(() => svc.addCircleMember('alex', 'mom')).toThrow(/already in your circle/);
+    expect(() => svc.addCircleMember('alex', 'bob')).toThrow(/couldn’t find/);
+    expect(() => svc.addCircleMember('maya', 'mom', 'x'.repeat(41))).toThrow(/40 characters/);
+    expect(() => svc.addCircleMember('stranger', 'mom')).toThrow(/people\.csv/);
+    expect(ids(svc.circle('maya'))).toEqual([]);
+  });
+
+  it('renames a member, and a blank nickname clears it', () => {
+    const { svc, storage } = setup();
+    expect(svc.renameCircleMember('alex', 'lisa', 'Auntie').find((p) => p.id === 'lisa')!.nickname).toBe('Auntie');
+    const cleared = svc.renameCircleMember('alex', 'lisa', '   ').find((p) => p.id === 'lisa')!;
+    expect(cleared).toEqual({ id: 'lisa', firstName: 'Lisa', lastName: 'Park' });
+    expect(storage.files['circles.csv']).toContain('\nalex,lisa,\n');
+    expect(ids(svc.circle('alex'))).toEqual(['mom', 'maya', 'lisa']); // order kept
+    expect(() => svc.renameCircleMember('alex', 'alex', 'Me')).toThrow(/isn’t in your circle/);
+  });
+
+  it('removes a member so future requests don’t go to them', () => {
+    const { svc } = setup();
+    expect(ids(svc.removeCircleMember('alex', 'lisa'))).toEqual(['mom', 'maya']);
+    expect(() => svc.removeCircleMember('alex', 'lisa')).toThrow(/isn’t in your circle/);
+    const loan = svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 100_000, months: 6 });
+    expect(loan.offers.map((o) => o.memberId)).toEqual(['mom', 'maya']);
+  });
+
+  it('withdraws a removed member’s offer on the open request', () => {
+    const { svc, advance } = setup();
+    const loan = svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 150_000, months: 10 });
+    advance(5_000); // Maya offers, Lisa declines, Mom hasn't answered
+    svc.setOfferAccepted('alex', loan.id, 'maya', true);
+    svc.removeCircleMember('alex', 'maya');
+    svc.removeCircleMember('alex', 'mom');
+    svc.removeCircleMember('alex', 'lisa');
+    const offers = svc.myLoan('alex')!.offers.map((o) => `${o.memberId}:${o.status}:${o.accepted}`);
+    expect(offers).toEqual(['mom:expired:false', 'maya:expired:false', 'lisa:declined:false']);
+    expect(() => svc.respond('mom', loan.id, { kind: 'offer', amount: 100_000 })).toThrow(/already answered/);
+    expect(() => svc.signAsBorrower('alex', loan.id)).toThrow(/Accept at least one/);
+    expect(svc.incoming('mom')[0]!.offers).toEqual([expect.objectContaining({ memberId: 'mom', status: 'expired' })]);
+  });
+
+  it('stops a scripted relative from answering once removed', () => {
+    const { svc, advance } = setup();
+    svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 150_000, months: 10 });
+    svc.removeCircleMember('alex', 'maya');
+    advance(5_000);
+    expect(svc.myLoan('alex')!.offers.find((o) => o.memberId === 'maya')!.status).toBe('expired');
+  });
+
+  it('doesn’t touch a loan the borrower already signed', () => {
+    const { svc, advance } = setup();
+    const loan = svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 150_000, months: 10 });
+    svc.respond('mom', loan.id, { kind: 'offer', amount: 100_000 });
+    svc.setOfferAccepted('alex', loan.id, 'mom', true);
+    svc.signAsBorrower('alex', loan.id);
+    svc.removeCircleMember('alex', 'mom');
+    expect(svc.myLoan('alex')!.agreements.map((a) => a.lenderId)).toEqual(['mom']);
+    svc.signAsLender('mom', loan.id);
+    advance(1_000);
+    expect(svc.myLoan('alex')!.status).toBe('active');
+  });
+
+  it('only changes the caller’s own circle', () => {
+    const { svc } = setup();
+    svc.removeCircleMember('mom', 'alex');
+    expect(ids(svc.circle('alex'))).toEqual(['mom', 'maya', 'lisa']);
+    expect(ids(svc.circle('mom'))).toEqual(['lisa']);
+  });
+
+  it('rejects hand edits that repeat a member or add the owner', () => {
+    const base = loadDataDir();
+    expect(() => readDatabase({ ...base, 'circles.csv': base['circles.csv'] + 'alex,mom,Mama\n' })).toThrow(/circles\.csv, line 7, column "member_id".*already/);
+    expect(() => readDatabase({ ...base, 'circles.csv': base['circles.csv'] + 'alex,alex,\n' })).toThrow(/own circle/);
+  });
+
+  it('reset brings the shared circles back', () => {
+    const shared = loadDataDir();
+    const storage = memoryStorage(shared);
+    const withReset = { ...storage, reset: () => storage.write(Object.fromEntries(Object.entries(shared).filter(([f]) => f in writeActivity(readDatabase(shared))))) };
+    const svc = new FamilyShieldService(withReset);
+    svc.removeCircleMember('alex', 'mom');
+    expect(storage.files['circles.csv']).not.toBe(shared['circles.csv']);
+    svc.reset();
+    expect(storage.files['circles.csv']).toBe(shared['circles.csv']);
+  });
+});

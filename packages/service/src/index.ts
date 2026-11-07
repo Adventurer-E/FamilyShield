@@ -1,4 +1,4 @@
-export { FamilyShieldService, redactForLender } from './service';
+export { FamilyShieldService, MAX_NICKNAME, redactForLender } from './service';
 export type { CsvStorage, ServiceOptions } from './service';
 export {
   ACTIVITY_FILES,

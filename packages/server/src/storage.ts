@@ -8,9 +8,9 @@ import type { CsvFiles, CsvStorage } from '@familyshield/service';
  * Two layers of CSV files, so developers on different branches don't
  * conflict over test data:
  *
- *   data/           SHARED, committed. Setup tables (settings, people, circles,
+ *   data/           SHARED, committed. Setup tables (settings, people, reasons,
  *                   rewards, auto replies) plus the starting state of the
- *                   activity tables. Changed on purpose, reviewed like code.
+ *                   activity tables (loans, circles, …). Changed on purpose, reviewed like code.
  *   data/local/     PERSONAL, git-ignored. The working copy of the activity
  *                   tables that the server writes as you use the app. Created
  *                   from data/ on first run; "reset" copies data/ over it again.

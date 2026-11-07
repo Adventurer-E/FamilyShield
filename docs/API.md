@@ -47,6 +47,32 @@ in `packages/core/src/types.ts`. `Profile` is defined in
 | `GET /me/loan` | `LoanCase \| null` | The caller’s latest loan as borrower (excluding cancelled) |
 | `GET /me/incoming` | `LoanCase[]` | Requests the caller was asked on, **redacted** for a lender, newest first |
 
+### Trusted circle
+
+Each person manages their own circle. Every call returns the caller’s circle
+as it now stands: `Person[]`, the same shape as `Profile.circle`
+(`{ id, firstName, lastName, nickname? }`).
+
+| Method & path | Body | Notes |
+| --- | --- | --- |
+| `GET /me/circle` | — | The caller’s circle, in the order members were added |
+| `POST /me/circle` | `{ memberId, nickname? }` | Add a person by their id. Fails with `INVALID_INPUT` for yourself or someone already in the circle, and `NOT_FOUND` for an unknown id |
+| `POST /me/circle/:memberId/nickname` | `{ nickname }` | Rename how the caller refers to a member. A blank nickname clears it |
+| `POST /me/circle/:memberId/remove` | — | Take a member out of the circle |
+
+Rules:
+
+- Nicknames are trimmed, inner spaces are collapsed, and they may be up to 40
+  characters.
+- A request goes to whoever is in the borrower’s circle **when it is created**.
+  Adding someone later doesn’t add them to a request that is already open.
+- Removing someone withdraws their offer on the caller’s request that is still
+  `collecting`: an unanswered or made offer becomes `expired` and
+  un-accepted, so it can’t be accepted or signed. A decline stays a decline.
+  Once the borrower has signed, the agreements stand and the loan is
+  unchanged (`withdrawMember` in `packages/core/src/loan.ts`).
+- Removing someone only changes the caller’s circle, never theirs.
+
 ### Borrower actions
 
 | Method & path | Body | Core function |
@@ -76,7 +102,7 @@ These stand in for the bank’s own systems and are **not** part of the producti
 | --- | --- | --- |
 | `GET /mockup/people` | `MockupPerson[]` | Everyone in `people.csv`, for the “Viewing as” menu |
 | `GET /mockup/accounts/:userId` | `AccountSummary` | `{ balance, transactions, exampleTransactions }`: the opening balance plus `transactions.csv`, and the everyday bank activity from `example_transactions.csv` (display only, not counted in the balance) |
-| `POST /mockup/reset` | `204` | Empties every activity table (setup tables untouched) |
+| `POST /mockup/reset` | `204` | Puts every activity table, circles included, back to the shared starting state (setup tables untouched) |
 
 If a CSV can’t be read, every call returns `500` with
 `{ "error": { "code": "DATA_ERROR", "message": "people.csv, line 3, column \"opening_balance\": …" } }`.
@@ -87,6 +113,8 @@ If a CSV can’t be read, every call returns `500` with
 npm run dev:server
 curl localhost:8787/v1/config
 curl -H 'Authorization: Bearer alex' localhost:8787/v1/me
+curl -X POST -H 'Authorization: Bearer maya' -H 'Content-Type: application/json' \
+     -d '{"memberId":"lisa","nickname":"Aunt Lisa"}' localhost:8787/v1/me/circle
 curl -X POST -H 'Authorization: Bearer alex' -H 'Content-Type: application/json' \
      -d '{"reason":"car","purpose":"Car repair","amount":150000,"months":10}' localhost:8787/v1/loans
 cat data/loans.csv

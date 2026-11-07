@@ -1,5 +1,5 @@
 import { FamilyShieldError } from '@familyshield/core';
-import type { FamilyShieldErrorCode, LenderResponse, LoanCase } from '@familyshield/core';
+import type { FamilyShieldErrorCode, LenderResponse, LoanCase, Person } from '@familyshield/core';
 import type { AppConfig, CreateRequestInput, FamilyShieldApi, Profile } from './types';
 
 export interface HttpApiOptions {
@@ -111,6 +111,18 @@ export class HttpApi implements FamilyShieldApi {
   }
   respondToPause(loanId: string, approve: boolean) {
     return this.call<LoanCase>('POST', `/loans/${encodeURIComponent(loanId)}/pause/responses`, { approve });
+  }
+  getCircle() {
+    return this.call<Person[]>('GET', '/me/circle');
+  }
+  addCircleMember(memberId: string, nickname?: string) {
+    return this.call<Person[]>('POST', '/me/circle', nickname === undefined ? { memberId } : { memberId, nickname });
+  }
+  renameCircleMember(memberId: string, nickname: string) {
+    return this.call<Person[]>('POST', `/me/circle/${encodeURIComponent(memberId)}/nickname`, { nickname });
+  }
+  removeCircleMember(memberId: string) {
+    return this.call<Person[]>('POST', `/me/circle/${encodeURIComponent(memberId)}/remove`);
   }
 
   subscribe(listener: () => void): () => void {

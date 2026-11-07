@@ -126,6 +126,24 @@ export function setOfferAccepted(loan: LoanCase, memberId: PersonId, accepted: b
   return next;
 }
 
+/**
+ * The borrower removed this person from their circle. While the request is
+ * still collecting, their offer is withdrawn: an unanswered or made offer
+ * becomes 'expired' (and un-accepted), so it can't be accepted or signed.
+ * A decline stays a decline. Once the borrower has signed, the agreements
+ * stand, so the loan is returned unchanged.
+ */
+export function withdrawMember(loan: LoanCase, memberId: PersonId): LoanCase {
+  if (loan.status !== 'collecting') return loan;
+  const offer = loan.offers.find((o) => o.memberId === memberId);
+  if (!offer || (offer.status !== 'pending' && offer.status !== 'offered')) return loan;
+  const next = clone(loan);
+  const o = findOffer(next, memberId);
+  o.status = 'expired';
+  o.accepted = false;
+  return next;
+}
+
 export function acceptedTotal(loan: LoanCase): Cents {
   return sum(loan.offers.filter((o) => o.status === 'offered' && o.accepted).map((o) => o.amount));
 }

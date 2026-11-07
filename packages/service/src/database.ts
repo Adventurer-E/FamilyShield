@@ -23,8 +23,10 @@ import type { CsvRecord } from './csv';
  * SETUP tables are written by people (edit them in a spreadsheet or text
  * editor). The app only reads them.
  * ACTIVITY tables are written by the app as people use it, and can also be
- * edited by hand. Money is in dollars ("157.50"); yes/no columns accept
- * yes/no, true/false or 1/0; times are ISO 8601.
+ * edited by hand. Trusted circles are activity: data/circles.csv is the
+ * starting state, and people add, rename and remove members from the app.
+ * Money is in dollars ("157.50"); yes/no columns accept yes/no, true/false
+ * or 1/0; times are ISO 8601.
  */
 
 export type CsvFiles = Record<string, string>;
@@ -90,7 +92,6 @@ export interface Database {
 export const SETUP_TABLES = {
   'settings.csv': ['key', 'value', 'description'],
   'people.csv': ['id', 'first_name', 'last_name', 'account_label', 'opening_balance'],
-  'circles.csv': ['owner_id', 'member_id', 'nickname'],
   'reasons.csv': ['id', 'label', 'template'],
   'rewards.csv': ['id', 'name', 'short_label', 'points_needed', 'category', 'partner', 'headline', 'detail', 'terms', 'valid_for_months'],
   'auto_replies.csv': ['member_id', 'reply_after_seconds', 'reply', 'offer_amount', 'note', 'auto_sign', 'auto_approve_pause'],
@@ -98,6 +99,8 @@ export const SETUP_TABLES = {
 } as const;
 
 export const ACTIVITY_TABLES = {
+  // Trusted circles start from data/circles.csv; people manage their own from the app.
+  'circles.csv': ['owner_id', 'member_id', 'nickname'],
   'loans.csv': ['id', 'borrower_id', 'reason', 'purpose', 'amount', 'months', 'status', 'created_at', 'funded_at', 'repaid_at', 'points', 'pauses_used'],
   'offers.csv': ['loan_id', 'member_id', 'status', 'amount', 'accepted', 'note', 'responded_at'],
   'agreements.csv': ['loan_id', 'lender_id', 'principal', 'interest_rate_percent', 'fee', 'total', 'borrower_signed_at', 'lender_signed_at'],
@@ -275,11 +278,16 @@ function readPeople(files: CsvFiles): PersonRow[] {
 
 function readCircles(files: CsvFiles, people: PersonRow[]): CircleRow[] {
   const known = new Set(people.map((p) => p.id));
+  const seen = new Set<string>();
   return readTable('circles.csv', files['circles.csv'], ['owner_id', 'member_id']).map((r) => {
     const ownerId = req(r, 'owner_id');
     const memberId = req(r, 'member_id');
     if (!known.has(ownerId)) fail(r, 'owner_id', `"${ownerId}" isn’t in people.csv`);
     if (!known.has(memberId)) fail(r, 'member_id', `"${memberId}" isn’t in people.csv`);
+    if (memberId === ownerId) fail(r, 'member_id', `"${memberId}" can’t be in their own circle`);
+    const pair = `${ownerId}\u0000${memberId}`;
+    if (seen.has(pair)) fail(r, 'member_id', `"${memberId}" is already in ${ownerId}’s circle on an earlier line`);
+    seen.add(pair);
     return { ownerId, memberId, nickname: opt(r, 'nickname') };
   });
 }
@@ -477,6 +485,9 @@ export function writeActivity(db: Database): Record<ActivityFile, string> {
   const rows = Object.fromEntries(ACTIVITY_FILES.map((f) => [f, []])) as unknown as Record<ActivityFile, Array<Record<string, string>>>;
   const o = (v: string | undefined) => v ?? '';
 
+  for (const c of db.circles) {
+    rows['circles.csv'].push({ owner_id: c.ownerId, member_id: c.memberId, nickname: o(c.nickname) });
+  }
   for (const l of db.loans) {
     rows['loans.csv'].push({
       id: l.id,

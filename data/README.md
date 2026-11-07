@@ -25,9 +25,10 @@ developers and branches don't conflict over test data.
 If someone changes the shared starting state (you pull a commit that touches
 `data/`), the server warns you at startup and suggests `npm run data:reset`.
 
-Setup tables (settings, people, circles, reasons, rewards, auto replies, example
-transactions) live **only** in
-`data/`. Edit them there; the change applies on the next request.
+Setup tables (settings, people, reasons, rewards, auto replies, example
+transactions) live **only** in `data/`. Edit them there; the change applies on
+the next request. Trusted circles are an activity table: `data/circles.csv` is
+the starting state, and people change their own circles in the app.
 
 ## Where each mode reads from
 
@@ -84,11 +85,6 @@ signed agreement don't change.
 rows in `transactions.csv`. Everyone listed here appears in the top bar's
 **Viewing as** menu.
 
-### `circles.csv`: trusted circles
-
-One row per (owner, member): `owner_id`, `member_id`, `nickname` (how the owner
-refers to them, e.g. "Mom"). A request goes to everyone in the borrower's circle.
-
 ### `auto_replies.csv`: relatives the mockup plays automatically
 
 | Column | Meaning |
@@ -130,11 +126,13 @@ loan is fully repaid **and** the family's points reach `points_needed`.
 
 The app writes these in your working copy (`data/local/`). The copies in
 `data/` are the shared starting state: header-only by default, so the story
-starts fresh. “Reset functional mockup” copies them over your working copy.
+starts fresh. The exception is `circles.csv`, which starts with the demo
+family's circles. “Reset functional mockup” copies them over your working copy.
 Setup tables are untouched.
 
 | File | One row per | Columns |
 | --- | --- | --- |
+| `circles.csv` | (owner, member) pair | `owner_id`, `member_id`, `nickname` (how the owner refers to them, e.g. "Mom"; blank = their first name). A request goes to everyone in the borrower's circle when it is created. Edited from the app (docs/API.md, "Trusted circle"); a member can't be the owner or appear twice for the same owner |
 | `loans.csv` | request / loan | `id`, `borrower_id`, `reason` (car, medical, job, other), `purpose`, `amount`, `months`, `status` (collecting, signing, active, repaid, cancelled), `created_at`, `funded_at`, `repaid_at`, `points`, `pauses_used` |
 | `offers.csv` | person asked | `loan_id`, `member_id`, `status` (pending, offered, declined, expired), `amount`, `accepted`, `note`, `responded_at` |
 | `agreements.csv` | lender | `loan_id`, `lender_id`, `principal`, `interest_rate_percent`, `fee`, `total` (always recalculated as principal + fee), `borrower_signed_at`, `lender_signed_at` |
