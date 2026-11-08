@@ -232,6 +232,9 @@ function readRules(files: CsvFiles): Rules {
       case 'max_pauses':
         rules.maxPauses = int(r, 'value');
         break;
+      case 'show_free_option':
+        rules.showFreeOption = bool(r, 'value', false);
+        break;
       case 'points_per_helper':
         rules.points.help = int(r, 'value');
         break;

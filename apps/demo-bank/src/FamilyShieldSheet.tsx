@@ -57,7 +57,7 @@ export function FamilyShieldSheet(props: { userId: string; mode: EmbedMode; onCl
       {mode === 'inline' ? (
         <div ref={mountRef} className="sheet-body" />
       ) : (
-        <iframe key={userId} ref={frameRef} className="sheet-body" title="FamilyShield" src="./embed.html" />
+        <iframe key={userId} ref={frameRef} className="sheet-body" title="FamilyShield" src={`./embed.html${window.location.search}`} />
       )}
     </div>
   );

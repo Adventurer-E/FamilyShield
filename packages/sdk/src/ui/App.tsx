@@ -1,6 +1,6 @@
 import { useFs } from './context';
 import { Hub } from './screens/Hub';
-import { Request } from './screens/Request';
+import { RequestEntry } from './screens/Choose';
 import { Offers } from './screens/Offers';
 import { Agreement } from './screens/Agreement';
 import { Repay } from './screens/Repay';
@@ -21,7 +21,7 @@ export function Screens() {
     case 'hub':
       return <Hub />;
     case 'request':
-      return open ? <BorrowerStep /> : <Request />;
+      return open ? <BorrowerStep /> : <RequestEntry />;
     case 'offers':
     case 'agreement':
     case 'repay':

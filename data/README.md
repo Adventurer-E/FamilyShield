@@ -70,6 +70,7 @@ Extra columns are ignored.
 | `default_term_months` | Term the request screen starts at (must be one of `terms_months`) | `10` |
 | `lender_offer_amounts` | Quick-pick amounts a lender sees when offering, in dollars, separated by `\|`. Only amounts up to the request are shown; a "The full $X" choice appears when the request is larger than all of them | `250\|500\|1000` |
 | `max_pauses` | One-month pauses allowed per loan | `1` |
+| `show_free_option` | Experiment arm B (M5, hypothesis #8): before the request, the borrower chooses between FamilyShield (with its fee) and arranging the loan themselves for free. `yes` or `no`. On the live mockup, add `?free_option=yes` (arm B) or `?free_option=no` (arm A) to the link instead of editing this file | `no` |
 | `points_per_helper` | Points per relative who funds the loan | `100` |
 | `points_per_on_time_payment` | Points per on-time payment | `80` |
 | `points_on_full_repayment` | Bonus at full repayment | `200` |

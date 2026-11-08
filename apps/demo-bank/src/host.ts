@@ -21,6 +21,20 @@ const apiUrl = import.meta.env.VITE_API_URL;
  */
 const folder = typeof window !== 'undefined' ? new URL('.', window.location.href).pathname : '/';
 
+/**
+ * Experiment arms for the M5 fee test (hypothesis #8): `?free_option=yes` on
+ * the link shows the free-option choice (arm B), `?free_option=no` hides it
+ * (arm A), whatever settings.csv says. Browser mode only; with the backend
+ * server, set show_free_option in data/settings.csv instead.
+ */
+function withArm(files: Record<string, string>): Record<string, string> {
+  const arm = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('free_option')?.toLowerCase() : undefined;
+  if (arm !== 'yes' && arm !== 'no') return files;
+  const settings = files['settings.csv'] ?? 'key,value,description\n';
+  const rows = settings.split('\n').filter((line) => line && !/^show_free_option,/i.test(line));
+  return { ...files, 'settings.csv': `${[...rows, `show_free_option,${arm},`].join('\n')}\n` };
+}
+
 export const host: MockupHost = apiUrl
   ? createServerMockup({ baseUrl: apiUrl })
-  : createBrowserMockup({ files: SEED_CSV, storageKey: `familyshield-csv-v1:${folder}` });
+  : createBrowserMockup({ files: withArm(SEED_CSV), storageKey: `familyshield-csv-v1:${folder}` });

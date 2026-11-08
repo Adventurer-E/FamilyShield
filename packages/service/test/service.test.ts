@@ -159,6 +159,13 @@ describe('the service over CSVs', () => {
     expect(svc.account('alex').balance).toBe(999_999);
   });
 
+  it('reads the free-option experiment switch from settings.csv', () => {
+    const { svc, storage } = setup();
+    expect(svc.config().rules.showFreeOption).toBe(false);
+    storage.files['settings.csv'] = storage.files['settings.csv']!.replace('show_free_option,no,', 'show_free_option,yes,');
+    expect(svc.config().rules.showFreeOption).toBe(true);
+  });
+
   it('serves reasons and example transactions without counting them in the balance', () => {
     const { svc } = setup();
     expect(svc.config().reasons).toHaveLength(4);

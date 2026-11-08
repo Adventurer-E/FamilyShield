@@ -21,6 +21,11 @@ export interface Rules {
   offerAmounts: Cents[];
   /** How many one-month pauses a borrower may ask for over a loan's life. */
   maxPauses: number;
+  /**
+   * Experiment (M5, hypothesis #8): before the request, show a choice between
+   * FamilyShield and arranging the loan informally (free). Off by default.
+   */
+  showFreeOption: boolean;
   /** Family points. Points belong to the whole circle on a loan, not one person. */
   points: {
     /** Per family member who funds the loan, awarded when the loan goes live. */
@@ -42,6 +47,7 @@ export const DEFAULT_RULES: Rules = {
   defaultTerm: 10,
   offerAmounts: [25_000, 50_000, 100_000], // $250, $500, $1,000
   maxPauses: 1,
+  showFreeOption: false,
   points: { help: 100, onTime: 80, complete: 200 },
 };
 
