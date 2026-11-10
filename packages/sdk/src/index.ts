@@ -14,4 +14,4 @@ export type { AppConfig, CreateRequestInput, FamilyShieldApi, Profile } from './
 export type { BridgeMessage, HostEvent, HostEventType, InitMessage } from './bridge';
 export { defaultTheme } from './theme';
 export type { Theme } from './theme';
-export type { Route } from './ui/context';
+export type { Role, Route } from './ui/context';

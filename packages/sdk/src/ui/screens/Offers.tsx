@@ -4,7 +4,7 @@ import { useFs } from '../context';
 import { Avatar, Button, DemoHint, Notice, Screen } from '../kit';
 
 export function Offers({ loan }: { loan: LoanCase }) {
-  const { api, run, go, nameOf } = useFs();
+  const { api, run, go, goHome, nameOf } = useFs();
   const accepted = acceptedTotal(loan);
   const pending = loan.offers.filter((o) => o.status === 'pending');
   const replied = loan.offers.length - pending.length;
@@ -76,7 +76,7 @@ export function Offers({ loan }: { loan: LoanCase }) {
           Signing now closes the request: anyone who hasn’t replied won’t be able to join.
         </p>
       ) : null}
-      <Button variant="ghost" onClick={() => run(() => api.cancelRequest(loan.id)).then((r) => r && go({ name: 'hub' }, { replace: true }))}>
+      <Button variant="ghost" onClick={() => run(() => api.cancelRequest(loan.id)).then((r) => r && goHome())}>
         Cancel request
       </Button>
     </Screen>

@@ -5,7 +5,13 @@ import type { LoanCase, PersonId } from '@familyshield/core';
 import type { AppConfig, FamilyShieldApi, Profile } from '../api/types';
 import type { HostEvent } from '../bridge';
 
+/** Which side of FamilyShield the user is looking at. */
+export type Role = 'borrower' | 'lender';
+
 export type Route =
+  | { name: 'borrowerHome' }
+  | { name: 'lenderHome' }
+  /** @deprecated Opens the default home (see `defaultRole`). Kept so hosts passing `initialRoute: { name: 'hub' }` still work. */
   | { name: 'hub' }
   | { name: 'request' }
   | { name: 'offers' }
@@ -31,6 +37,12 @@ interface FsContext {
   go(route: Route, options?: { replace?: boolean }): void;
   /** Back one screen; at the root this closes the module. */
   back(): void;
+  /** The role whose home is at the bottom of the stack. */
+  role: Role;
+  /** Switch to the other role's home. Clears the stack, so Back from there closes the module. */
+  switchRole(role: Role): void;
+  /** Return to the current role's home, dropping everything above it. */
+  goHome(): void;
   emit(event: HostEvent): void;
   /** Show demo-only hints and shortcuts. */
   demo: boolean;
@@ -41,6 +53,37 @@ interface FsContext {
   clearError(): void;
   nameOf(id: PersonId): string;
   fullNameOf(id: PersonId): string;
+}
+
+export function homeRoute(role: Role): Route {
+  return role === 'lender' ? { name: 'lenderHome' } : { name: 'borrowerHome' };
+}
+
+/** Does someone in my family need an answer from me as a lender? */
+export function lenderNeedsAction(data: Pick<FsData, 'incoming' | 'profile'>): boolean {
+  const me = data.profile.me.id;
+  return data.incoming.some((loan) => {
+    if (loan.status === 'collecting') return loan.offers[0]?.status === 'pending';
+    const agreement = loan.agreements.find((a) => a.lenderId === me);
+    if (!agreement) return false;
+    if (loan.status === 'signing') return !agreement.lenderSignedAt;
+    return loan.pause?.status === 'pending' && loan.pause.approvals[me] === null;
+  });
+}
+
+/**
+ * Which home to open on: the lender home when a family request is waiting on me
+ * and I have no open loan of my own, otherwise the borrower home.
+ */
+export function defaultRole(data: Pick<FsData, 'incoming' | 'profile' | 'myLoan'>): Role {
+  const myLoanOpen = data.myLoan && data.myLoan.status !== 'repaid' && data.myLoan.status !== 'cancelled';
+  return !myLoanOpen && lenderNeedsAction(data) ? 'lender' : 'borrower';
+}
+
+function roleOf(route: Route): Role | null {
+  if (route.name === 'borrowerHome') return 'borrower';
+  if (route.name === 'lenderHome') return 'lender';
+  return null;
 }
 
 const Ctx = createContext<FsContext | null>(null);
@@ -66,6 +109,7 @@ export function FamilyShieldProvider(props: {
   const { api, emit, demo } = props;
   const [data, setData] = useState<FsData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Starts as `hub`; replaced with the right home once data has loaded (below).
   const [stack, setStack] = useState<Route[]>([props.initialRoute ?? { name: 'hub' }]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +128,12 @@ export function FamilyShieldProvider(props: {
     void load();
     return api.subscribe(() => void load());
   }, [api, load]);
+
+  // Resolve the legacy/initial `hub` route to a real home as soon as we know which one fits.
+  useEffect(() => {
+    if (!data) return;
+    setStack((s) => (s.some((r) => r.name === 'hub') ? s.map((r) => (r.name === 'hub' ? homeRoute(defaultRole(data)) : r)) : s));
+  }, [data]);
 
   useEffect(() => {
     if (data) emit({ type: 'ready' });
@@ -127,6 +177,11 @@ export function FamilyShieldProvider(props: {
     setStack((s) => (options?.replace ? [...s.slice(0, -1), route] : [...s, route]));
   }, []);
 
+  const switchRole = useCallback((role: Role) => {
+    setError(null);
+    setStack([homeRoute(role)]);
+  }, []);
+
   const back = useCallback(() => {
     setError(null);
     setStack((s) => {
@@ -140,6 +195,9 @@ export function FamilyShieldProvider(props: {
 
   if (!data) return <>{props.children({ ready: false, loadError })}</>;
 
+  const fallbackRole = defaultRole(data);
+  const role = stack.map(roleOf).find((r) => r !== null) ?? fallbackRole;
+
   const person = (id: PersonId) => data.profile.people.find((p) => p.id === id) ?? (data.profile.me.id === id ? data.profile.me : undefined);
   const value: FsContext = {
     api,
@@ -147,6 +205,9 @@ export function FamilyShieldProvider(props: {
     route: stack[stack.length - 1]!,
     go,
     back,
+    role,
+    switchRole,
+    goHome: () => switchRole(role),
     emit,
     demo,
     run,

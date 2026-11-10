@@ -55,6 +55,10 @@ handle.unmount();
 - The module inherits the host’s `font-family` unless `theme.font` is set.
 - To open on a specific screen, for example from a push notification, pass
   `initialRoute: { name: 'respond', loanId }`.
+- By default the module opens on the borrower home, or on the lender home when a
+  family request is waiting on the user and they have no open request of their own.
+  To force one, pass `initialRoute: { name: 'borrowerHome' }` or
+  `initialRoute: { name: 'lenderHome' }`. Back (or ✕) at a home closes the module.
 
 ## 2b. Embed page (native WebView or iframe)
 

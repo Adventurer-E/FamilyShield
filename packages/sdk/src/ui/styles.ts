@@ -36,6 +36,10 @@ export const styles = `
 .fs-card h2, .fs-card h3 { margin: 0; }
 .fs-h2 { font-size: 24px; font-weight: 800; line-height: 1.2; }
 .fs-h3 { font-size: 16px; font-weight: 800; }
+.fs-roles { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--fs-surface); border: 1px solid var(--fs-line); }
+.fs-role { flex: 1; min-height: 40px; border: none; border-radius: 999px; background: transparent; color: var(--fs-muted); font: inherit; font-size: 14px; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.fs-role[aria-selected="true"] { background: var(--fs-brand); color: var(--fs-on-brand); }
+.fs-role-dot { width: 8px; height: 8px; border-radius: 4px; background: var(--fs-accent); }
 .fs-section-title { font-size: 15px; font-weight: 800; margin: 6px 0 -4px; }
 .fs-muted { color: var(--fs-muted); }
 .fs-small { font-size: 13px; }
