@@ -1,7 +1,7 @@
 import { formatDate, formatMoney, lenderSummary, nextInstallment, repaymentSummary } from '@familyshield/core';
 import type { LoanCase } from '@familyshield/core';
-import { useFs } from '../context';
-import type { Route } from '../context';
+import { lenderNeedsAction, useFs } from '../context';
+import type { Role, Route } from '../context';
 import { Avatar, Button, Progress, Screen } from '../kit';
 import { ChevronIcon, DocIcon, LockIcon, StarIcon } from '../icons';
 
@@ -79,13 +79,65 @@ function incomingStatus(loan: LoanCase, meId: string): { text: string; action: b
   return { text: `Repaying you · ${formatMoney(ls.received)} of ${formatMoney(ls.lent)}`, action: false, route: lender };
 }
 
-export function Hub() {
-  const { data, go, nameOf } = useFs();
-  const { myLoan, incoming, profile } = data;
+/** Borrower / lender toggle shown at the top of both homes. */
+export function RoleSwitch() {
+  const { role, switchRole, data } = useFs();
+  const lenderAction = lenderNeedsAction(data);
+  const tabs: Array<{ role: Role; label: string; badge: boolean }> = [
+    { role: 'borrower', label: 'I need support', badge: false },
+    { role: 'lender', label: 'I’m helping family', badge: lenderAction },
+  ];
+  return (
+    <div className="fs-roles" role="tablist" aria-label="Switch between borrowing and lending">
+      {tabs.map((t) => (
+        <button
+          key={t.role}
+          type="button"
+          role="tab"
+          aria-selected={role === t.role}
+          className="fs-role"
+          onClick={() => role !== t.role && switchRole(t.role)}
+        >
+          {t.label}
+          {t.badge ? <span className="fs-role-dot" aria-label="needs your answer" /> : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function TrustedCircle() {
+  const { data } = useFs();
+  const { circle } = data.profile;
+  return (
+    <section className="fs-card">
+      <div className="fs-row">
+        <div className="fs-avatars">
+          {circle.map((p) => (
+            <Avatar key={p.id} id={p.id} />
+          ))}
+        </div>
+        <div className="fs-grow">
+          <div style={{ fontWeight: 800 }}>Trusted circle</div>
+          <div className="fs-small fs-muted">{circle.map((p) => p.nickname ?? p.firstName).join(', ') || 'Nobody yet'}</div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Borrower home. Placeholder content reused from the old shared hub;
+ * the real layout is ticket B1 (#27).
+ */
+export function BorrowerHome() {
+  const { data, go } = useFs();
+  const { myLoan, profile } = data;
   const open = myLoan && myLoan.status !== 'repaid';
 
   return (
     <Screen title="FamilyShield" eyebrow={profile.account.label} root>
+      <RoleSwitch />
       {myLoan ? <MyLoanCard loan={myLoan} /> : null}
 
       {!open ? (
@@ -98,44 +150,6 @@ export function Hub() {
           <Button onClick={() => go({ name: 'request' })}>{myLoan ? 'Start a new request' : 'Start a request'}</Button>
         </section>
       ) : null}
-
-      {incoming.length > 0 ? (
-        <>
-          <h2 className="fs-section-title">Your family’s requests</h2>
-          <div className="fs-card flush">
-            {incoming.map((loan) => {
-              const st = incomingStatus(loan, profile.me.id);
-              return (
-                <button key={loan.id} type="button" className="fs-list-btn" onClick={() => go(st.route)}>
-                  <Avatar id={loan.borrowerId} />
-                  <span className="fs-grow">
-                    <span style={{ display: 'block', fontWeight: 800 }}>
-                      {nameOf(loan.borrowerId)} · {formatMoney(loan.amount)}
-                    </span>
-                    <span className="fs-small fs-muted">{st.text}</span>
-                  </span>
-                  {st.action ? <span className="fs-pill solid">Action</span> : null}
-                  <ChevronIcon size={18} stroke="#5A6478" />
-                </button>
-              );
-            })}
-          </div>
-        </>
-      ) : null}
-
-      <section className="fs-card">
-        <div className="fs-row">
-          <div className="fs-avatars">
-            {profile.circle.map((p) => (
-              <Avatar key={p.id} id={p.id} />
-            ))}
-          </div>
-          <div className="fs-grow">
-            <div style={{ fontWeight: 800 }}>Trusted circle</div>
-            <div className="fs-small fs-muted">{profile.circle.map((p) => p.nickname ?? p.firstName).join(', ') || 'Nobody yet'}</div>
-          </div>
-        </div>
-      </section>
 
       {myLoan ? (
         <div className="fs-card flush">
@@ -175,6 +189,50 @@ export function Hub() {
           </div>
         </section>
       ) : null}
+
+      <TrustedCircle />
+    </Screen>
+  );
+}
+
+/**
+ * Lender home. Placeholder content reused from the old shared hub;
+ * the real layout is ticket B2 (#28).
+ */
+export function LenderHome() {
+  const { data, go, nameOf } = useFs();
+  const { incoming, profile } = data;
+
+  return (
+    <Screen title="FamilyShield" eyebrow={profile.account.label} root>
+      <RoleSwitch />
+      <h2 className="fs-section-title">Your family’s requests</h2>
+      {incoming.length > 0 ? (
+        <div className="fs-card flush">
+          {incoming.map((loan) => {
+            const st = incomingStatus(loan, profile.me.id);
+            return (
+              <button key={loan.id} type="button" className="fs-list-btn" onClick={() => go(st.route)}>
+                <Avatar id={loan.borrowerId} />
+                <span className="fs-grow">
+                  <span style={{ display: 'block', fontWeight: 800 }}>
+                    {nameOf(loan.borrowerId)} · {formatMoney(loan.amount)}
+                  </span>
+                  <span className="fs-small fs-muted">{st.text}</span>
+                </span>
+                {st.action ? <span className="fs-pill solid">Action</span> : null}
+                <ChevronIcon size={18} stroke="#5A6478" />
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <section className="fs-card">
+          <div className="fs-small fs-muted">No one in your family has asked for help right now. When they do, their request shows up here.</div>
+        </section>
+      )}
+
+      <TrustedCircle />
     </Screen>
   );
 }
