@@ -74,6 +74,15 @@ export function createApp(service: FamilyShieldService, options: { allowOrigin?:
   route('GET', '/v1/me/loan', (c) => service.myLoan(c.user()));
   route('GET', '/v1/me/incoming', (c) => service.incoming(c.user()));
 
+  // ---- trusted circle (the caller's own)
+  const nickname = (v: unknown) => (v === undefined || v === null ? undefined : str(v, 'nickname'));
+  route('GET', '/v1/me/circle', (c) => service.circle(c.user()));
+  route('POST', '/v1/me/circle', (c) => service.addCircleMember(c.user(), str(c.body.memberId, 'memberId'), nickname(c.body.nickname)));
+  route('POST', '/v1/me/circle/:memberId/nickname', (c) =>
+    service.renameCircleMember(c.user(), c.params.memberId!, nickname(c.body.nickname) ?? ''),
+  );
+  route('POST', '/v1/me/circle/:memberId/remove', (c) => service.removeCircleMember(c.user(), c.params.memberId!));
+
   // ---- borrower
   route('POST', '/v1/loans', (c) => {
     const input: CreateRequestInput = {

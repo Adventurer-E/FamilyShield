@@ -13,6 +13,7 @@ import {
   setOfferAccepted,
   signAsBorrower,
   signAsLender,
+  withdrawMember,
 } from '@familyshield/core';
 import type {
   AccountSummary,
@@ -366,4 +367,82 @@ export class FamilyShieldService {
   respondToPause(userId: string, loanId: string, approve: boolean) {
     return redactForLender(this.mutate(loanId, (l) => respondToPause(l, userId, approve), this.asLender(userId)), userId);
   }
+
+  // ------------------------------------------------------------ trusted circle
+  //
+  // Each person manages their own circle (circles.csv). Every call returns the
+  // caller's circle as it now stands, in the same shape as Profile.circle.
+  // A new request goes to whoever is in the circle when it is created, so
+  // adding someone doesn't add them to a request that is already open.
+
+  private circleOf(db: Database, userId: string): Person[] {
+    return db.circles
+      .filter((c) => c.ownerId === userId)
+      .flatMap((c) => {
+        const p = db.people.find((x) => x.id === c.memberId);
+        return p ? [{ id: p.id, firstName: p.firstName, lastName: p.lastName, ...(c.nickname ? { nickname: c.nickname } : {}) }] : [];
+      });
+  }
+
+  private cleanNickname(nickname: unknown): string | undefined {
+    if (nickname === undefined || nickname === null) return undefined;
+    if (typeof nickname !== 'string') throw new FamilyShieldError('INVALID_INPUT', 'A nickname must be text.');
+    const clean = nickname.replace(/\s+/g, ' ').trim();
+    if (clean.length > MAX_NICKNAME) throw new FamilyShieldError('INVALID_INPUT', `Keep nicknames to ${MAX_NICKNAME} characters or fewer.`);
+    return clean || undefined;
+  }
+
+  private inCircle(db: Database, userId: string, memberId: string) {
+    const row = db.circles.find((c) => c.ownerId === userId && c.memberId === memberId);
+    if (!row) throw new FamilyShieldError('NOT_FOUND', 'That person isn’t in your circle.');
+    return row;
+  }
+
+  circle(userId: string): Person[] {
+    const db = this.open();
+    this.user(db, userId);
+    return this.circleOf(db, userId);
+  }
+
+  /** Add someone from people.csv to the caller's circle, optionally with a nickname. */
+  addCircleMember(userId: string, memberId: string, nickname?: string): Person[] {
+    const db = this.open();
+    this.user(db, userId);
+    if (memberId === userId) throw new FamilyShieldError('INVALID_INPUT', 'You can’t add yourself to your own circle.');
+    if (!db.people.some((p) => p.id === memberId)) throw new FamilyShieldError('NOT_FOUND', 'We couldn’t find that person.');
+    if (db.circles.some((c) => c.ownerId === userId && c.memberId === memberId)) {
+      throw new FamilyShieldError('INVALID_INPUT', 'They’re already in your circle.');
+    }
+    db.circles.push({ ownerId: userId, memberId, nickname: this.cleanNickname(nickname) });
+    this.storage.write(writeActivity(db));
+    return this.circleOf(db, userId);
+  }
+
+  /** Change how the caller refers to a circle member. A blank nickname clears it. */
+  renameCircleMember(userId: string, memberId: string, nickname: string): Person[] {
+    const db = this.open();
+    this.user(db, userId);
+    const row = this.inCircle(db, userId, memberId);
+    row.nickname = this.cleanNickname(nickname);
+    this.storage.write(writeActivity(db));
+    return this.circleOf(db, userId);
+  }
+
+  /**
+   * Take someone out of the caller's circle. Future requests won't go to them.
+   * On the caller's request that is still collecting offers, their offer is
+   * withdrawn (see withdrawMember); signed and active loans are not affected.
+   */
+  removeCircleMember(userId: string, memberId: string): Person[] {
+    const db = this.open();
+    this.user(db, userId);
+    this.inCircle(db, userId, memberId);
+    db.circles = db.circles.filter((c) => !(c.ownerId === userId && c.memberId === memberId));
+    db.loans = db.loans.map((l) => (l.borrowerId === userId ? withdrawMember(l, memberId) : l));
+    this.storage.write(writeActivity(db));
+    return this.circleOf(db, userId);
+  }
 }
+
+/** Longest nickname a person can give a circle member. */
+export const MAX_NICKNAME = 40;

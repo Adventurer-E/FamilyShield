@@ -4,15 +4,16 @@
 //   npm run data:save    Share your current state: copy data/local/ into data/, then review and commit it
 //   npm run data:status  Show which activity files differ between the two
 //
-// Setup tables (settings, people, circles, reasons, rewards, auto_replies,
-// example_transactions) live only in
-// data/; edit them there directly. These commands move the ACTIVITY tables.
+// Setup tables (settings, people, reasons, rewards, auto_replies,
+// example_transactions) live only in data/; edit them there directly.
+// These commands move the ACTIVITY tables, including circles.csv.
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ACTIVITY = [
+  'circles.csv',
   'loans.csv',
   'offers.csv',
   'agreements.csv',
