@@ -59,6 +59,9 @@ handle.unmount();
   family request is waiting on the user and they have no open request of their own.
   To force one, pass `initialRoute: { name: 'borrowerHome' }` or
   `initialRoute: { name: 'lenderHome' }`. Back (or ✕) at a home closes the module.
+- To open straight on the trusted circle (for example from a "Manage family"
+  entry in the bank's own settings), pass `initialRoute: { name: 'circle' }`.
+  Back from there closes the module.
 
 ## 2b. Embed page (native WebView or iframe)
 

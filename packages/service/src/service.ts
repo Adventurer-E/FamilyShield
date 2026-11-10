@@ -263,7 +263,10 @@ export class FamilyShieldService {
     };
     const circleIds = db.circles.filter((c) => c.ownerId === userId).map((c) => c.memberId);
     const askedBy = db.loans.filter((l) => l.offers.some((o) => o.memberId === userId)).map((l) => l.borrowerId);
-    const visible = [...new Set([...circleIds, ...askedBy])].filter((id) => id !== userId && db.people.some((p) => p.id === id));
+    // Everyone asked on my own requests, so a lender I later remove from my circle
+    // still shows by name on my offers, agreements and repayments.
+    const myLenders = db.loans.filter((l) => l.borrowerId === userId).flatMap((l) => l.offers.map((o) => o.memberId));
+    const visible = [...new Set([...circleIds, ...askedBy, ...myLenders])].filter((id) => id !== userId && db.people.some((p) => p.id === id));
     return {
       me: { id: me.id, firstName: me.firstName, lastName: me.lastName },
       circle: circleIds.filter((id) => db.people.some((p) => p.id === id)).map(toPerson),

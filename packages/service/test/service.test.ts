@@ -295,6 +295,9 @@ describe('the trusted circle', () => {
     svc.signAsLender('mom', loan.id);
     advance(1_000);
     expect(svc.myLoan('alex')!.status).toBe('active');
+    // Out of the circle, but still a lender on this loan: the borrower still sees who she is.
+    expect(ids(svc.profile('alex').circle)).not.toContain('mom');
+    expect(svc.profile('alex').people.find((p) => p.id === 'mom')).toMatchObject({ firstName: 'Grace', lastName: 'Chen' });
   });
 
   it('only changes the caller’s own circle', () => {

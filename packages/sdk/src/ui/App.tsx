@@ -6,6 +6,7 @@ import { Agreement } from './screens/Agreement';
 import { Repay } from './screens/Repay';
 import { Reward } from './screens/Reward';
 import { LenderLoan, Respond } from './screens/Lender';
+import { Circle } from './screens/Circle';
 
 /**
  * Picks the screen for the current route. The bottom of the stack is always
@@ -35,6 +36,8 @@ export function Screens() {
     case 'agreement':
     case 'repay':
       return loan ? <BorrowerStep requested={route.name} /> : <Home />;
+    case 'circle':
+      return <Circle />;
     case 'reward':
       return loan ? <Reward loan={loan} rewardId={route.rewardId} /> : <Home />;
     case 'respond':

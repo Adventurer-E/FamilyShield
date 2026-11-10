@@ -19,7 +19,9 @@ export type Route =
   | { name: 'repay' }
   | { name: 'reward'; rewardId: string }
   | { name: 'respond'; loanId: string }
-  | { name: 'lender'; loanId: string };
+  | { name: 'lender'; loanId: string }
+  /** Manage my trusted circle (B3). Opened from either home. */
+  | { name: 'circle' };
 
 export interface FsData {
   /** Rules, request reasons and rewards as the backend has them (data/settings.csv, data/reasons.csv, data/rewards.csv). */
