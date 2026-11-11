@@ -8,8 +8,8 @@ import { Request } from './Request';
  * Experiment arm B (M5, hypothesis #8): will borrowers pay the service fee for
  * what FamilyShield adds when a free, informal loan is right there?
  *
- * When settings.csv has show_free_option = yes (or the link has
- * ?free_option=yes), starting a request first shows a choice between
+ * When settings.csv has show_free_option = yes (in the functional mockup: the
+ * toolbar's Free option switch), starting a request first shows a choice between
  * FamilyShield and arranging it yourselves. Choosing FamilyShield continues to
  * the normal request screen; choosing the free option ends on a short screen.
  * With the setting off (arm A), the request screen opens directly, as before.

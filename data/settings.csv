@@ -8,7 +8,7 @@ default_request,1500,Amount the request screen starts at in dollars (between min
 default_term_months,10,Term the request screen starts at (must be one of terms_months)
 lender_offer_amounts,250|500|1000,Quick-pick offer amounts a lender sees in dollars (separate with |); only those up to the request show
 max_pauses,1,How many one-month pauses a borrower can ask for per loan
-show_free_option,no,Experiment: before the request offer a choice between FamilyShield and arranging it yourselves for free (yes/no); a link with ?free_option=yes or ?free_option=no overrides this
+show_free_option,no,Experiment: before the request offer a choice between FamilyShield and arranging it yourselves for free (yes/no); the mockup toolbar's Free option switch overrides this
 points_per_helper,100,Family points for each relative who funds the loan
 points_per_on_time_payment,80,Family points for each payment made on or before its due date
 points_on_full_repayment,200,Bonus family points when the loan is fully repaid

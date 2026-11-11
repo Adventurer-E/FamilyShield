@@ -6,6 +6,7 @@ import { BankHome, entrySubtitle } from './BankHome';
 import { CsvPanel } from './CsvPanel';
 import { FamilyShieldSheet } from './FamilyShieldSheet';
 import type { EmbedMode } from './FamilyShieldSheet';
+import { readFreeOption, saveFreeOption } from './freeOption';
 import { host } from './host';
 
 function remembered<T extends string>(key: string, fallback: T, allowed?: readonly T[]): T {
@@ -76,6 +77,9 @@ export function App() {
   const [mode, setMode] = useState<EmbedMode>(() => remembered<EmbedMode>('mockup-embed', 'inline', ['inline', 'webview']));
   const [open, setOpen] = useState(false);
   const [csvOpen, setCsvOpen] = useState(false);
+  // Free option (fee experiment arm B): the toolbar switch, or null to follow settings.csv.
+  const [freeOption, setFreeOption] = useState<boolean | null>(() => readFreeOption());
+  const [freeOptionInData, setFreeOptionInData] = useState(false);
   const [toast, setToast] = useState<{ text: string; via: EmbedMode } | null>(null);
   const bank = useBankData(userId);
 
@@ -90,6 +94,15 @@ export function App() {
     if (bank.people.length && !bank.people.some((p) => p.id === userId)) setUserId(bank.people[0]!.id);
   }, [bank.people, userId]);
 
+  useEffect(() => {
+    host
+      .apiFor(userId)
+      .getConfig()
+      .then((c) => setFreeOptionInData(c.rules.showFreeOption))
+      .catch(() => {});
+  }, [userId]);
+  const freeOptionShown = freeOption ?? freeOptionInData;
+
   const me = bank.people.find((p) => p.id === userId);
 
   const switchUser = (id: string) => {
@@ -100,6 +113,10 @@ export function App() {
   const switchMode = (m: EmbedMode) => {
     setMode(m);
     remember('mockup-embed', m);
+  };
+  const switchFreeOption = (on: boolean) => {
+    setFreeOption(on);
+    saveFreeOption(on);
   };
 
   return (
@@ -122,6 +139,13 @@ export function App() {
           <span className="seg-label">Embed as</span>
           <button type="button" aria-pressed={mode === 'inline'} onClick={() => switchMode('inline')}>Inline SDK</button>
           <button type="button" aria-pressed={mode === 'webview'} onClick={() => switchMode('webview')}>WebView</button>
+        </div>
+        <div className="seg" role="group" aria-label="Free option (fee experiment)">
+          <span className="seg-label" title="Fee experiment: before a request, offer a choice between FamilyShield and arranging the loan for free">
+            Free option
+          </span>
+          <button type="button" aria-pressed={!freeOptionShown} onClick={() => switchFreeOption(false)}>Off</button>
+          <button type="button" aria-pressed={freeOptionShown} onClick={() => switchFreeOption(true)}>On</button>
         </div>
         <button type="button" className="data-chip" onClick={() => setCsvOpen(true)} title="Where the data lives">
           <span className={`dot ${host.mode}`} aria-hidden="true" />
@@ -159,6 +183,7 @@ export function App() {
             <FamilyShieldSheet
               userId={userId}
               mode={mode}
+              freeOption={freeOption}
               onClose={() => setOpen(false)}
               onEvent={(e) => {
                 const text = toastFor(e);
@@ -191,6 +216,11 @@ export function App() {
           <p>
             <strong>Inline SDK</strong> mounts the module straight into the bank’s page. <strong>WebView</strong> loads the standalone embed page
             in a frame and talks over postMessage, exactly like a native iOS/Android app would.
+          </p>
+          <p>
+            <strong>Free option</strong> is the fee experiment (hypothesis #8): when it’s on, starting a request first asks whether to use
+            FamilyShield or arrange the loan with family for free. Send participants a link ending in <code>?free_option=yes</code> or{' '}
+            <code>?free_option=no</code> to put them in one group.
           </p>
           <p className="fine">All people, partners and money here are fictional. “Reset functional mockup” goes back to the shared starting state in data/.</p>
         </aside>
