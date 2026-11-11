@@ -12,8 +12,11 @@ import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Keep in step with ACTIVITY_TABLES in packages/service/src/database.ts
+// (a service test checks this).
 const ACTIVITY = [
   'circles.csv',
+  'new_people.csv',
   'loans.csv',
   'offers.csv',
   'agreements.csv',

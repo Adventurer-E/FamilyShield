@@ -106,11 +106,18 @@ export function RoleSwitch() {
   );
 }
 
+/** Summary of my circle on both homes; opens the circle screen (B3). */
 function TrustedCircle() {
-  const { data } = useFs();
+  const { data, go } = useFs();
   const { circle } = data.profile;
   return (
-    <section className="fs-card">
+    <button
+      type="button"
+      className="fs-card"
+      style={{ border: 'none', textAlign: 'left', cursor: 'pointer', font: 'inherit', color: 'inherit' }}
+      onClick={() => go({ name: 'circle' })}
+      aria-label="Manage your trusted circle"
+    >
       <div className="fs-row">
         <div className="fs-avatars">
           {circle.map((p) => (
@@ -121,8 +128,9 @@ function TrustedCircle() {
           <div style={{ fontWeight: 800 }}>Trusted circle</div>
           <div className="fs-small fs-muted">{circle.map((p) => p.nickname ?? p.firstName).join(', ') || 'Nobody yet'}</div>
         </div>
+        <ChevronIcon size={18} stroke="#5A6478" />
       </div>
-    </section>
+    </button>
   );
 }
 

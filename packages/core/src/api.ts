@@ -10,7 +10,7 @@ export interface Profile {
   me: Person;
   /** The people in my trusted circle. */
   circle: Person[];
-  /** Everyone I may see a name for: my circle plus borrowers who asked me. */
+  /** Everyone I may see a name for: my circle, borrowers who asked me, and everyone asked on my own requests. */
   people: Person[];
   /** The bank account FamilyShield pays into and collects from. */
   account: { id: string; label: string };

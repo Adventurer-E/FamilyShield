@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import type { PersonId } from '@familyshield/core';
 import { useFs } from './context';
@@ -7,6 +8,12 @@ import { AlertIcon, BackIcon, CloseIcon, InfoIcon, LockIcon } from './icons';
 
 export function Screen(props: { eyebrow?: string; title: string; step?: number; root?: boolean; children: ReactNode }) {
   const { back, error, clearError } = useFs();
+  // Errors show at the top of the screen; bring them into view when one appears
+  // (the action may have been far down, e.g. the add form on the circle screen).
+  const errorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+  }, [error]);
   return (
     <main className="fs-screen">
       <header className="fs-header">
@@ -20,7 +27,7 @@ export function Screen(props: { eyebrow?: string; title: string; step?: number; 
       </header>
       {props.step ? <Steps step={props.step} /> : null}
       {error ? (
-        <div className="fs-error" role="alert">
+        <div className="fs-error" role="alert" ref={errorRef}>
           <AlertIcon />
           <span>{error}</span>
           <button type="button" onClick={clearError} aria-label="Dismiss">✕</button>

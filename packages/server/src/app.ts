@@ -77,7 +77,12 @@ export function createApp(service: FamilyShieldService, options: { allowOrigin?:
   // ---- trusted circle (the caller's own)
   const nickname = (v: unknown) => (v === undefined || v === null ? undefined : str(v, 'nickname'));
   route('GET', '/v1/me/circle', (c) => service.circle(c.user()));
-  route('POST', '/v1/me/circle', (c) => service.addCircleMember(c.user(), str(c.body.memberId, 'memberId'), nickname(c.body.nickname)));
+  route('POST', '/v1/me/circle', (c) =>
+    service.addCircleMemberByContact(c.user(), str(c.body.contact, 'contact'), {
+      nickname: nickname(c.body.nickname),
+      name: typeof c.body.name === 'string' ? c.body.name : undefined,
+    }),
+  );
   route('POST', '/v1/me/circle/:memberId/nickname', (c) =>
     service.renameCircleMember(c.user(), c.params.memberId!, nickname(c.body.nickname) ?? ''),
   );

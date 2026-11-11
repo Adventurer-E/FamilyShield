@@ -56,7 +56,7 @@ as it now stands: `Person[]`, the same shape as `Profile.circle`
 | Method & path | Body | Notes |
 | --- | --- | --- |
 | `GET /me/circle` | — | The caller’s circle, in the order members were added |
-| `POST /me/circle` | `{ memberId, nickname? }` | Add a person by their id. Fails with `INVALID_INPUT` for yourself or someone already in the circle, and `NOT_FOUND` for an unknown id |
+| `POST /me/circle` | `{ contact, nickname?, name? }` | Add someone by the **email or phone** they bank with (`contact`; a US phone number, 10 digits; case, spaces and phone punctuation don't matter). If nobody has it yet, a new FamilyShield account is created for it (in `new_people.csv`), named `name` if given. Fails with `INVALID_INPUT` for an empty or unreadable contact, yourself, someone already in the circle, or a nickname/name that's too long. *Short-term:* later the new person gets an invitation link, and eventually is only added after verifying their bank account |
 | `POST /me/circle/:memberId/nickname` | `{ nickname }` | Rename how the caller refers to a member. A blank nickname clears it |
 | `POST /me/circle/:memberId/remove` | — | Take a member out of the circle |
 
@@ -114,7 +114,7 @@ npm run dev:server
 curl localhost:8787/v1/config
 curl -H 'Authorization: Bearer alex' localhost:8787/v1/me
 curl -X POST -H 'Authorization: Bearer maya' -H 'Content-Type: application/json' \
-     -d '{"memberId":"lisa","nickname":"Aunt Lisa"}' localhost:8787/v1/me/circle
+     -d '{"contact":"lisa.park@example.com","nickname":"Aunt Lisa"}' localhost:8787/v1/me/circle
 curl -X POST -H 'Authorization: Bearer alex' -H 'Content-Type: application/json' \
      -d '{"reason":"car","purpose":"Car repair","amount":150000,"months":10}' localhost:8787/v1/loans
 cat data/loans.csv

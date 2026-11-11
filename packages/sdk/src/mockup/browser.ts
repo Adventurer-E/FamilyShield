@@ -117,7 +117,7 @@ export function createBrowserMockup(options: { files: CsvFiles; storageKey?: str
         signAsLender: (id) => async(() => service.signAsLender(userId, id)),
         respondToPause: (id, approve) => async(() => service.respondToPause(userId, id, approve)),
         getCircle: () => async(() => service.circle(userId)),
-        addCircleMember: (memberId, nickname) => async(() => service.addCircleMember(userId, memberId, nickname)),
+        addCircleMember: (contact, opts) => async(() => service.addCircleMemberByContact(userId, contact, opts)),
         renameCircleMember: (memberId, nickname) => async(() => service.renameCircleMember(userId, memberId, nickname)),
         removeCircleMember: (memberId) => async(() => service.removeCircleMember(userId, memberId)),
         subscribe(listener) {

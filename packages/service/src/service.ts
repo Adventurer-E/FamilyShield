@@ -27,6 +27,8 @@ import type {
 } from '@familyshield/core';
 import { emptyActivity, readDatabase, writeActivity } from './database';
 import type { CsvFiles, Database } from './database';
+import { formatPhone, parseContact } from './contact';
+import type { Contact } from './contact';
 
 /**
  * Where the CSV files live. Setup tables always come from the shared, committed
@@ -263,7 +265,10 @@ export class FamilyShieldService {
     };
     const circleIds = db.circles.filter((c) => c.ownerId === userId).map((c) => c.memberId);
     const askedBy = db.loans.filter((l) => l.offers.some((o) => o.memberId === userId)).map((l) => l.borrowerId);
-    const visible = [...new Set([...circleIds, ...askedBy])].filter((id) => id !== userId && db.people.some((p) => p.id === id));
+    // Everyone asked on my own requests, so a lender I later remove from my circle
+    // still shows by name on my offers, agreements and repayments.
+    const myLenders = db.loans.filter((l) => l.borrowerId === userId).flatMap((l) => l.offers.map((o) => o.memberId));
+    const visible = [...new Set([...circleIds, ...askedBy, ...myLenders])].filter((id) => id !== userId && db.people.some((p) => p.id === id));
     return {
       me: { id: me.id, firstName: me.firstName, lastName: me.lastName },
       circle: circleIds.filter((id) => db.people.some((p) => p.id === id)).map(toPerson),
@@ -404,18 +409,76 @@ export class FamilyShieldService {
     return this.circleOf(db, userId);
   }
 
-  /** Add someone from people.csv to the caller's circle, optionally with a nickname. */
+  /**
+   * Add someone to the caller's circle by person id. Used by tests and back-office
+   * tooling; the app adds by email or phone (addCircleMemberByContact).
+   */
   addCircleMember(userId: string, memberId: string, nickname?: string): Person[] {
     const db = this.open();
     this.user(db, userId);
-    if (memberId === userId) throw new FamilyShieldError('INVALID_INPUT', 'You can’t add yourself to your own circle.');
     if (!db.people.some((p) => p.id === memberId)) throw new FamilyShieldError('NOT_FOUND', 'We couldn’t find that person.');
+    this.pushCircleMember(db, userId, memberId, nickname);
+    this.storage.write(writeActivity(db));
+    return this.circleOf(db, userId);
+  }
+
+  /**
+   * Add someone to the caller's circle by the email or phone they bank with.
+   * If nobody has that email or phone yet, a FamilyShield account is created
+   * for it (saved in new_people.csv), named `name` if given.
+   *
+   * Short-term behavior. Later: send them an invitation link to register, and
+   * eventually only add them once they verify the bank account behind it.
+   */
+  addCircleMemberByContact(userId: string, contactText: string, opts: { nickname?: string; name?: string } = {}): Person[] {
+    const db = this.open();
+    this.user(db, userId);
+    if (typeof contactText !== 'string' || !contactText.trim()) {
+      throw new FamilyShieldError('INVALID_INPUT', 'Enter their email or phone number.');
+    }
+    const contact = parseContact(contactText);
+    if (!contact) {
+      throw new FamilyShieldError('INVALID_INPUT', 'That doesn’t look like an email or a US phone number. Try grace.chen@example.com or (607) 555-0102.');
+    }
+    const nickname = this.cleanNickname(opts.nickname);
+    let person = db.people.find((p) => (contact.kind === 'email' ? p.email : p.phone) === contact.value);
+    if (!person) {
+      const { firstName, lastName } = this.cleanName(opts.name, contact);
+      person = {
+        id: this.id('person'),
+        firstName,
+        lastName,
+        accountLabel: 'New FamilyShield account',
+        openingBalance: 0,
+        ...(contact.kind === 'email' ? { email: contact.value } : { phone: contact.value }),
+        createdBy: userId,
+        createdAt: this.iso(),
+      };
+      db.people.push(person);
+    }
+    this.pushCircleMember(db, userId, person.id, nickname);
+    this.storage.write(writeActivity(db));
+    return this.circleOf(db, userId);
+  }
+
+  private pushCircleMember(db: Database, userId: string, memberId: string, nickname: unknown) {
+    if (memberId === userId) throw new FamilyShieldError('INVALID_INPUT', 'You can’t add yourself to your own circle.');
     if (db.circles.some((c) => c.ownerId === userId && c.memberId === memberId)) {
       throw new FamilyShieldError('INVALID_INPUT', 'They’re already in your circle.');
     }
     db.circles.push({ ownerId: userId, memberId, nickname: this.cleanNickname(nickname) });
-    this.storage.write(writeActivity(db));
-    return this.circleOf(db, userId);
+  }
+
+  /** "Lisa Park" → first and last name; with no name, the email's local part or the phone number. */
+  private cleanName(name: unknown, contact: Contact): { firstName: string; lastName: string } {
+    if (name !== undefined && name !== null && typeof name !== 'string') throw new FamilyShieldError('INVALID_INPUT', 'A name must be text.');
+    const clean = (name ?? '').replace(/\s+/g, ' ').trim();
+    if (clean.length > MAX_NAME) throw new FamilyShieldError('INVALID_INPUT', `Keep names to ${MAX_NAME} characters or fewer.`);
+    if (clean) {
+      const [first, ...rest] = clean.split(' ');
+      return { firstName: first!, lastName: rest.join(' ') };
+    }
+    return { firstName: contact.kind === 'email' ? contact.value.split('@')[0]! : formatPhone(contact.value), lastName: '' };
   }
 
   /** Change how the caller refers to a circle member. A blank nickname clears it. */
@@ -446,3 +509,5 @@ export class FamilyShieldService {
 
 /** Longest nickname a person can give a circle member. */
 export const MAX_NICKNAME = 40;
+/** Longest name for an account created when adding by email or phone. */
+export const MAX_NAME = 60;
