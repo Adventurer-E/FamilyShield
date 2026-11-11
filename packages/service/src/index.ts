@@ -1,4 +1,6 @@
-export { FamilyShieldService, redactForLender } from './service';
+export { FamilyShieldService, MAX_NAME, MAX_NICKNAME, redactForLender } from './service';
+export { formatPhone, normalizeEmail, normalizePhone, parseContact } from './contact';
+export type { Contact } from './contact';
 export type { CsvStorage, ServiceOptions } from './service';
 export {
   ACTIVITY_FILES,

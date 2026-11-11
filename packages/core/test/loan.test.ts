@@ -17,6 +17,7 @@ import {
   signAsLender,
   sum,
   lenderSummary,
+  withdrawMember,
 } from '../src';
 import type { LoanCase } from '../src';
 
@@ -95,6 +96,26 @@ describe('offers', () => {
   it('can’t accept a declined offer', () => {
     const loan = respondToRequest(newRequest(), 'lisa', { kind: 'decline' }, T0);
     expect(() => setOfferAccepted(loan, 'lisa', true)).toThrow();
+  });
+});
+
+describe('removing someone from the circle', () => {
+  it('withdraws their pending or made offer while the request is collecting', () => {
+    let loan = respondToRequest(newRequest(), 'maya', { kind: 'offer', amount: 50_000 }, T0);
+    loan = setOfferAccepted(loan, 'maya', true);
+    const afterMaya = withdrawMember(loan, 'maya');
+    expect(afterMaya.offers.find((o) => o.memberId === 'maya')).toMatchObject({ status: 'expired', accepted: false });
+    expect(() => signAsBorrower(afterMaya, T0)).toThrow(/Accept at least one/);
+    expect(withdrawMember(loan, 'mom').offers.find((o) => o.memberId === 'mom')!.status).toBe('expired');
+    expect(loan.offers.find((o) => o.memberId === 'maya')!.status).toBe('offered'); // input not mutated
+  });
+
+  it('leaves declines, strangers and signed loans alone', () => {
+    const declined = respondToRequest(newRequest(), 'lisa', { kind: 'decline' }, T0);
+    expect(withdrawMember(declined, 'lisa')).toBe(declined);
+    expect(withdrawMember(declined, 'nobody')).toBe(declined);
+    const funded = fundedLoan();
+    expect(withdrawMember(funded, 'mom')).toBe(funded);
   });
 });
 

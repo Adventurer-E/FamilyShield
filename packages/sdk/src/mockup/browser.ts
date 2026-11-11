@@ -7,7 +7,7 @@ import type { MockupHost } from './types';
  * Functional mockup with no server, e.g. on GitHub Pages. It runs the same
  * backend logic (FamilyShieldService) in the browser:
  *
- *  - setup tables (people, circles, settings, rewards, auto replies) come
+ *  - setup tables (people, settings, reasons, rewards, auto replies) come
  *    from the CSV files bundled at build time, i.e. data/ in the repo;
  *  - activity tables start from those files and are then kept in this
  *    browser's localStorage, still as CSV text, so they can be downloaded;
@@ -116,6 +116,10 @@ export function createBrowserMockup(options: { files: CsvFiles; storageKey?: str
         respond: (id, response) => async(() => service.respond(userId, id, response)),
         signAsLender: (id) => async(() => service.signAsLender(userId, id)),
         respondToPause: (id, approve) => async(() => service.respondToPause(userId, id, approve)),
+        getCircle: () => async(() => service.circle(userId)),
+        addCircleMember: (contact, opts) => async(() => service.addCircleMemberByContact(userId, contact, opts)),
+        renameCircleMember: (memberId, nickname) => async(() => service.renameCircleMember(userId, memberId, nickname)),
+        removeCircleMember: (memberId) => async(() => service.removeCircleMember(userId, memberId)),
         subscribe(listener) {
           listeners.add(listener);
           return () => listeners.delete(listener);

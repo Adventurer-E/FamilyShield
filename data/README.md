@@ -25,9 +25,10 @@ developers and branches don't conflict over test data.
 If someone changes the shared starting state (you pull a commit that touches
 `data/`), the server warns you at startup and suggests `npm run data:reset`.
 
-Setup tables (settings, people, circles, reasons, rewards, auto replies, example
-transactions) live **only** in
-`data/`. Edit them there; the change applies on the next request.
+Setup tables (settings, people, reasons, rewards, auto replies, example
+transactions) live **only** in `data/`. Edit them there; the change applies on
+the next request. Trusted circles are an activity table: `data/circles.csv` is
+the starting state, and people change their own circles in the app.
 
 ## Where each mode reads from
 
@@ -81,14 +82,15 @@ signed agreement don't change.
 ### `people.csv`: bank customers
 
 `id` (used everywhere else), `first_name`, `last_name`, `account_label`,
-`opening_balance`. A person's balance is `opening_balance` plus all their
-rows in `transactions.csv`. Everyone listed here appears in the top bar's
-**Viewing as** menu.
+`opening_balance`, `email`, `phone`. A person's balance is `opening_balance`
+plus all their rows in `transactions.csv`. Everyone listed here appears in the
+top bar's **Viewing as** menu.
 
-### `circles.csv`: trusted circles
-
-One row per (owner, member): `owner_id`, `member_id`, `nickname` (how the owner
-refers to them, e.g. "Mom"). A request goes to everyone in the borrower's circle.
+`email` and `phone` are how others add this person to their trusted circle.
+Both are optional, but no two people may share one. Phones are US numbers
+(10 digits; area code and exchange don't start with 0 or 1), written however
+you like (`(607) 555-0102`, `607-555-0102` and `+1 607 555 0102` are the same).
+Use `example.com` emails and `555-01xx` numbers so they stay fictional.
 
 ### `auto_replies.csv`: relatives the mockup plays automatically
 
@@ -131,11 +133,14 @@ loan is fully repaid **and** the family's points reach `points_needed`.
 
 The app writes these in your working copy (`data/local/`). The copies in
 `data/` are the shared starting state: header-only by default, so the story
-starts fresh. “Reset functional mockup” copies them over your working copy.
+starts fresh. The exception is `circles.csv`, which starts with the demo
+family's circles. “Reset functional mockup” copies them over your working copy.
 Setup tables are untouched.
 
 | File | One row per | Columns |
 | --- | --- | --- |
+| `new_people.csv` | account created by adding someone | `id`, `first_name`, `last_name`, `email`, `phone`, `created_by` (who added them), `created_at`. Written when someone adds an email or phone that nobody in `people.csv` has; these people start with a $0 balance and also appear in **Viewing as**. Empty in the shared starting state |
+| `circles.csv` | (owner, member) pair | `owner_id`, `member_id`, `nickname` (how the owner refers to them, e.g. "Mom"; blank = their first name). A request goes to everyone in the borrower's circle when it is created. Edited from the app (docs/API.md, "Trusted circle"); a member can't be the owner or appear twice for the same owner |
 | `loans.csv` | request / loan | `id`, `borrower_id`, `reason` (car, medical, job, other), `purpose`, `amount`, `months`, `status` (collecting, signing, active, repaid, cancelled), `created_at`, `funded_at`, `repaid_at`, `points`, `pauses_used` |
 | `offers.csv` | person asked | `loan_id`, `member_id`, `status` (pending, offered, declined, expired), `amount`, `accepted`, `note`, `responded_at` |
 | `agreements.csv` | lender | `loan_id`, `lender_id`, `principal`, `interest_rate_percent`, `fee`, `total` (always recalculated as principal + fee), `borrower_signed_at`, `lender_signed_at` |

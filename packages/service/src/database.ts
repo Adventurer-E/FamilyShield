@@ -1,4 +1,5 @@
 import { DEFAULT_REASONS, DEFAULT_RULES } from '@familyshield/core';
+import { normalizeEmail, normalizePhone } from './contact';
 import type {
   Agreement,
   Cents,
@@ -23,8 +24,10 @@ import type { CsvRecord } from './csv';
  * SETUP tables are written by people (edit them in a spreadsheet or text
  * editor). The app only reads them.
  * ACTIVITY tables are written by the app as people use it, and can also be
- * edited by hand. Money is in dollars ("157.50"); yes/no columns accept
- * yes/no, true/false or 1/0; times are ISO 8601.
+ * edited by hand. Trusted circles are activity: data/circles.csv is the
+ * starting state, and people add, rename and remove members from the app.
+ * Money is in dollars ("157.50"); yes/no columns accept yes/no, true/false
+ * or 1/0; times are ISO 8601.
  */
 
 export type CsvFiles = Record<string, string>;
@@ -35,6 +38,16 @@ export interface PersonRow {
   lastName: string;
   accountLabel: string;
   openingBalance: Cents;
+  /** Lowercased email the person banks with, if known. Used to add them to a circle. */
+  email?: string;
+  /** Phone number as digits only, if known. Used to add them to a circle. */
+  phone?: string;
+  /**
+   * Set for accounts the app created when someone added an email or phone
+   * nobody had yet (stored in new_people.csv). Absent for people.csv rows.
+   */
+  createdBy?: string;
+  createdAt?: string;
 }
 
 export interface CircleRow {
@@ -89,8 +102,7 @@ export interface Database {
 
 export const SETUP_TABLES = {
   'settings.csv': ['key', 'value', 'description'],
-  'people.csv': ['id', 'first_name', 'last_name', 'account_label', 'opening_balance'],
-  'circles.csv': ['owner_id', 'member_id', 'nickname'],
+  'people.csv': ['id', 'first_name', 'last_name', 'account_label', 'opening_balance', 'email', 'phone'],
   'reasons.csv': ['id', 'label', 'template'],
   'rewards.csv': ['id', 'name', 'short_label', 'points_needed', 'category', 'partner', 'headline', 'detail', 'terms', 'valid_for_months'],
   'auto_replies.csv': ['member_id', 'reply_after_seconds', 'reply', 'offer_amount', 'note', 'auto_sign', 'auto_approve_pause'],
@@ -98,6 +110,10 @@ export const SETUP_TABLES = {
 } as const;
 
 export const ACTIVITY_TABLES = {
+  // Trusted circles start from data/circles.csv; people manage their own from the app.
+  'circles.csv': ['owner_id', 'member_id', 'nickname'],
+  // Accounts created when someone adds an email or phone that nobody in people.csv has.
+  'new_people.csv': ['id', 'first_name', 'last_name', 'email', 'phone', 'created_by', 'created_at'],
   'loans.csv': ['id', 'borrower_id', 'reason', 'purpose', 'amount', 'months', 'status', 'created_at', 'funded_at', 'repaid_at', 'points', 'pauses_used'],
   'offers.csv': ['loan_id', 'member_id', 'status', 'amount', 'accepted', 'note', 'responded_at'],
   'agreements.csv': ['loan_id', 'lender_id', 'principal', 'interest_rate_percent', 'fee', 'total', 'borrower_signed_at', 'lender_signed_at'],
@@ -260,29 +276,74 @@ function readRules(files: CsvFiles): Rules {
   return rules;
 }
 
+function contactCells(r: CsvRecord): { email?: string; phone?: string } {
+  const rawEmail = r.get('email');
+  const rawPhone = r.get('phone');
+  const email = rawEmail ? normalizeEmail(rawEmail) : undefined;
+  const phone = rawPhone ? normalizePhone(rawPhone) : undefined;
+  if (rawEmail && !email) fail(r, 'email', `"${rawEmail}" isn’t an email address`);
+  if (rawPhone && !phone) fail(r, 'phone', `"${rawPhone}" isn’t a phone number`);
+  return { ...(email ? { email } : {}), ...(phone ? { phone } : {}) };
+}
+
 function readPeople(files: CsvFiles): PersonRow[] {
-  const people = readTable('people.csv', files['people.csv'], ['id', 'first_name']).map((r) => ({
-    id: req(r, 'id'),
-    firstName: req(r, 'first_name'),
-    lastName: r.get('last_name'),
-    accountLabel: r.get('account_label') || 'Checking',
-    openingBalance: money(r, 'opening_balance', 0),
-  }));
+  const setup = readTable('people.csv', files['people.csv'], ['id', 'first_name']).map(
+    (r): PersonRow => ({
+      id: req(r, 'id'),
+      firstName: req(r, 'first_name'),
+      lastName: r.get('last_name'),
+      accountLabel: r.get('account_label') || 'Checking',
+      openingBalance: money(r, 'opening_balance', 0),
+      ...contactCells(r),
+    }),
+  );
+  const created = readTable('new_people.csv', files['new_people.csv'], ['id', 'first_name']).map(
+    (r): PersonRow => ({
+      id: req(r, 'id'),
+      firstName: req(r, 'first_name'),
+      lastName: r.get('last_name'),
+      accountLabel: 'New FamilyShield account',
+      openingBalance: 0,
+      ...contactCells(r),
+      createdBy: req(r, 'created_by'),
+      createdAt: req(r, 'created_at'),
+    }),
+  );
+  const people = [...setup, ...created];
   const ids = new Set<string>();
+  const emails = new Map<string, string>();
+  const phones = new Map<string, string>();
   for (const p of people) {
-    if (ids.has(p.id)) throw new CsvDataError(`people.csv: the id "${p.id}" appears twice.`);
+    if (ids.has(p.id)) throw new CsvDataError(`people.csv / new_people.csv: the id "${p.id}" appears twice.`);
     ids.add(p.id);
+    if (p.email) {
+      if (emails.has(p.email)) throw new CsvDataError(`people.csv / new_people.csv: "${p.id}" and "${emails.get(p.email)}" have the same email.`);
+      emails.set(p.email, p.id);
+    }
+    if (p.phone) {
+      if (phones.has(p.phone)) throw new CsvDataError(`people.csv / new_people.csv: "${p.id}" and "${phones.get(p.phone)}" have the same phone.`);
+      phones.set(p.phone, p.id);
+    }
+  }
+  for (const p of created) {
+    if (!ids.has(p.createdBy!)) throw new CsvDataError(`new_people.csv: created_by "${p.createdBy}" for "${p.id}" isn’t a known person.`);
+    if (!p.email && !p.phone) throw new CsvDataError(`new_people.csv: "${p.id}" needs an email or a phone.`);
   }
   return people;
 }
 
 function readCircles(files: CsvFiles, people: PersonRow[]): CircleRow[] {
   const known = new Set(people.map((p) => p.id));
+  const seen = new Set<string>();
   return readTable('circles.csv', files['circles.csv'], ['owner_id', 'member_id']).map((r) => {
     const ownerId = req(r, 'owner_id');
     const memberId = req(r, 'member_id');
     if (!known.has(ownerId)) fail(r, 'owner_id', `"${ownerId}" isn’t in people.csv`);
     if (!known.has(memberId)) fail(r, 'member_id', `"${memberId}" isn’t in people.csv`);
+    if (memberId === ownerId) fail(r, 'member_id', `"${memberId}" can’t be in their own circle`);
+    const pair = `${ownerId}\u0000${memberId}`;
+    if (seen.has(pair)) fail(r, 'member_id', `"${memberId}" is already in ${ownerId}’s circle on an earlier line`);
+    seen.add(pair);
     return { ownerId, memberId, nickname: opt(r, 'nickname') };
   });
 }
@@ -480,6 +541,21 @@ export function writeActivity(db: Database): Record<ActivityFile, string> {
   const rows = Object.fromEntries(ACTIVITY_FILES.map((f) => [f, []])) as unknown as Record<ActivityFile, Array<Record<string, string>>>;
   const o = (v: string | undefined) => v ?? '';
 
+  for (const p of db.people) {
+    if (!p.createdBy) continue;
+    rows['new_people.csv'].push({
+      id: p.id,
+      first_name: p.firstName,
+      last_name: p.lastName,
+      email: o(p.email),
+      phone: o(p.phone),
+      created_by: p.createdBy,
+      created_at: o(p.createdAt),
+    });
+  }
+  for (const c of db.circles) {
+    rows['circles.csv'].push({ owner_id: c.ownerId, member_id: c.memberId, nickname: o(c.nickname) });
+  }
   for (const l of db.loans) {
     rows['loans.csv'].push({
       id: l.id,

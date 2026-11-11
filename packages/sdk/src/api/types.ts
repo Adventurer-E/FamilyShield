@@ -1,4 +1,4 @@
-import type { AppConfig, CreateRequestInput, LenderResponse, LoanCase, Profile } from '@familyshield/core';
+import type { AppConfig, CreateRequestInput, LenderResponse, LoanCase, Person, Profile } from '@familyshield/core';
 
 export type { AppConfig, CreateRequestInput, Profile };
 
@@ -40,6 +40,18 @@ export interface FamilyShieldApi {
   respond(loanId: string, response: LenderResponse): Promise<LoanCase>;
   signAsLender(loanId: string): Promise<LoanCase>;
   respondToPause(loanId: string, approve: boolean): Promise<LoanCase>;
+
+  // Trusted circle: each call returns the caller's circle as it now stands
+  getCircle(): Promise<Person[]>;
+  /**
+   * Add someone by the email or phone they bank with. If nobody has it yet, an
+   * account is created for it, named `name` if given. Returns the new circle.
+   */
+  addCircleMember(contact: string, opts?: { nickname?: string; name?: string }): Promise<Person[]>;
+  /** A blank nickname clears it. */
+  renameCircleMember(memberId: string, nickname: string): Promise<Person[]>;
+  /** Also withdraws their offer on the caller's request that is still collecting. */
+  removeCircleMember(memberId: string): Promise<Person[]>;
 
   /** Called whenever anything this user can see may have changed. Returns an unsubscribe function. */
   subscribe(listener: () => void): () => void;

@@ -1,5 +1,5 @@
-id,first_name,last_name,account_label,opening_balance
-alex,Alex,Chen,Everyday Checking ••4821,4328.50
-mom,Grace,Chen,Everyday Checking ••7730,18642.10
-maya,Maya,Lin,Everyday Checking ••1904,6200.00
-lisa,Lisa,Park,Everyday Checking ••3357,9150.00
+id,first_name,last_name,account_label,opening_balance,email,phone
+alex,Alex,Chen,Everyday Checking ••4821,4328.50,alex.chen@example.com,(607) 555-0101
+mom,Grace,Chen,Everyday Checking ••7730,18642.10,grace.chen@example.com,(607) 555-0102
+maya,Maya,Lin,Everyday Checking ••1904,6200.00,maya.lin@example.com,(607) 555-0103
+lisa,Lisa,Park,Everyday Checking ••3357,9150.00,lisa.park@example.com,(607) 555-0104

@@ -47,6 +47,32 @@ in `packages/core/src/types.ts`. `Profile` is defined in
 | `GET /me/loan` | `LoanCase \| null` | The caller’s latest loan as borrower (excluding cancelled) |
 | `GET /me/incoming` | `LoanCase[]` | Requests the caller was asked on, **redacted** for a lender, newest first |
 
+### Trusted circle
+
+Each person manages their own circle. Every call returns the caller’s circle
+as it now stands: `Person[]`, the same shape as `Profile.circle`
+(`{ id, firstName, lastName, nickname? }`).
+
+| Method & path | Body | Notes |
+| --- | --- | --- |
+| `GET /me/circle` | — | The caller’s circle, in the order members were added |
+| `POST /me/circle` | `{ contact, nickname?, name? }` | Add someone by the **email or phone** they bank with (`contact`; a US phone number, 10 digits; case, spaces and phone punctuation don't matter). If nobody has it yet, a new FamilyShield account is created for it (in `new_people.csv`), named `name` if given. Fails with `INVALID_INPUT` for an empty or unreadable contact, yourself, someone already in the circle, or a nickname/name that's too long. *Short-term:* later the new person gets an invitation link, and eventually is only added after verifying their bank account |
+| `POST /me/circle/:memberId/nickname` | `{ nickname }` | Rename how the caller refers to a member. A blank nickname clears it |
+| `POST /me/circle/:memberId/remove` | — | Take a member out of the circle |
+
+Rules:
+
+- Nicknames are trimmed, inner spaces are collapsed, and they may be up to 40
+  characters.
+- A request goes to whoever is in the borrower’s circle **when it is created**.
+  Adding someone later doesn’t add them to a request that is already open.
+- Removing someone withdraws their offer on the caller’s request that is still
+  `collecting`: an unanswered or made offer becomes `expired` and
+  un-accepted, so it can’t be accepted or signed. A decline stays a decline.
+  Once the borrower has signed, the agreements stand and the loan is
+  unchanged (`withdrawMember` in `packages/core/src/loan.ts`).
+- Removing someone only changes the caller’s circle, never theirs.
+
 ### Borrower actions
 
 | Method & path | Body | Core function |
@@ -76,7 +102,7 @@ These stand in for the bank’s own systems and are **not** part of the producti
 | --- | --- | --- |
 | `GET /mockup/people` | `MockupPerson[]` | Everyone in `people.csv`, for the “Viewing as” menu |
 | `GET /mockup/accounts/:userId` | `AccountSummary` | `{ balance, transactions, exampleTransactions }`: the opening balance plus `transactions.csv`, and the everyday bank activity from `example_transactions.csv` (display only, not counted in the balance) |
-| `POST /mockup/reset` | `204` | Empties every activity table (setup tables untouched) |
+| `POST /mockup/reset` | `204` | Puts every activity table, circles included, back to the shared starting state (setup tables untouched) |
 
 If a CSV can’t be read, every call returns `500` with
 `{ "error": { "code": "DATA_ERROR", "message": "people.csv, line 3, column \"opening_balance\": …" } }`.
@@ -87,6 +113,8 @@ If a CSV can’t be read, every call returns `500` with
 npm run dev:server
 curl localhost:8787/v1/config
 curl -H 'Authorization: Bearer alex' localhost:8787/v1/me
+curl -X POST -H 'Authorization: Bearer maya' -H 'Content-Type: application/json' \
+     -d '{"contact":"lisa.park@example.com","nickname":"Aunt Lisa"}' localhost:8787/v1/me/circle
 curl -X POST -H 'Authorization: Bearer alex' -H 'Content-Type: application/json' \
      -d '{"reason":"car","purpose":"Car repair","amount":150000,"months":10}' localhost:8787/v1/loans
 cat data/loans.csv
