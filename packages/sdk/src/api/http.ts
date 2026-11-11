@@ -115,8 +115,8 @@ export class HttpApi implements FamilyShieldApi {
   getCircle() {
     return this.call<Person[]>('GET', '/me/circle');
   }
-  addCircleMember(memberId: string, nickname?: string) {
-    return this.call<Person[]>('POST', '/me/circle', nickname === undefined ? { memberId } : { memberId, nickname });
+  addCircleMember(contact: string, opts: { nickname?: string; name?: string } = {}) {
+    return this.call<Person[]>('POST', '/me/circle', { contact, ...opts });
   }
   renameCircleMember(memberId: string, nickname: string) {
     return this.call<Person[]>('POST', `/me/circle/${encodeURIComponent(memberId)}/nickname`, { nickname });

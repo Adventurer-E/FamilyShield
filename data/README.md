@@ -81,9 +81,15 @@ signed agreement don't change.
 ### `people.csv`: bank customers
 
 `id` (used everywhere else), `first_name`, `last_name`, `account_label`,
-`opening_balance`. A person's balance is `opening_balance` plus all their
-rows in `transactions.csv`. Everyone listed here appears in the top bar's
-**Viewing as** menu.
+`opening_balance`, `email`, `phone`. A person's balance is `opening_balance`
+plus all their rows in `transactions.csv`. Everyone listed here appears in the
+top bar's **Viewing as** menu.
+
+`email` and `phone` are how others add this person to their trusted circle.
+Both are optional, but no two people may share one. Phones are US numbers
+(10 digits; area code and exchange don't start with 0 or 1), written however
+you like (`(607) 555-0102`, `607-555-0102` and `+1 607 555 0102` are the same).
+Use `example.com` emails and `555-01xx` numbers so they stay fictional.
 
 ### `auto_replies.csv`: relatives the mockup plays automatically
 
@@ -132,6 +138,7 @@ Setup tables are untouched.
 
 | File | One row per | Columns |
 | --- | --- | --- |
+| `new_people.csv` | account created by adding someone | `id`, `first_name`, `last_name`, `email`, `phone`, `created_by` (who added them), `created_at`. Written when someone adds an email or phone that nobody in `people.csv` has; these people start with a $0 balance and also appear in **Viewing as**. Empty in the shared starting state |
 | `circles.csv` | (owner, member) pair | `owner_id`, `member_id`, `nickname` (how the owner refers to them, e.g. "Mom"; blank = their first name). A request goes to everyone in the borrower's circle when it is created. Edited from the app (docs/API.md, "Trusted circle"); a member can't be the owner or appear twice for the same owner |
 | `loans.csv` | request / loan | `id`, `borrower_id`, `reason` (car, medical, job, other), `purpose`, `amount`, `months`, `status` (collecting, signing, active, repaid, cancelled), `created_at`, `funded_at`, `repaid_at`, `points`, `pauses_used` |
 | `offers.csv` | person asked | `loan_id`, `member_id`, `status` (pending, offered, declined, expired), `amount`, `accepted`, `note`, `responded_at` |

@@ -43,7 +43,11 @@ export interface FamilyShieldApi {
 
   // Trusted circle: each call returns the caller's circle as it now stands
   getCircle(): Promise<Person[]>;
-  addCircleMember(memberId: string, nickname?: string): Promise<Person[]>;
+  /**
+   * Add someone by the email or phone they bank with. If nobody has it yet, an
+   * account is created for it, named `name` if given. Returns the new circle.
+   */
+  addCircleMember(contact: string, opts?: { nickname?: string; name?: string }): Promise<Person[]>;
   /** A blank nickname clears it. */
   renameCircleMember(memberId: string, nickname: string): Promise<Person[]>;
   /** Also withdraws their offer on the caller's request that is still collecting. */

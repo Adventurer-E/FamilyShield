@@ -12,16 +12,14 @@ import { Avatar, Button, DemoHint, Notice, Screen } from '../kit';
  */
 export function Circle() {
   const { api, data, run } = useFs();
-  const { circle, me, people } = data.profile;
+  const { circle } = data.profile;
 
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [removing, setRemoving] = useState<string | null>(null);
-  const [newId, setNewId] = useState('');
+  const [newContact, setNewContact] = useState('');
+  const [newName, setNewName] = useState('');
   const [newNickname, setNewNickname] = useState('');
-
-  // People I can already see a name for (e.g. a relative who asked me) but who aren't in my circle.
-  const suggestions = people.filter((p) => p.id !== me.id && !circle.some((c) => c.id === p.id));
 
   const startRename = (p: Person) => {
     setRemoving(null);
@@ -38,11 +36,14 @@ export function Circle() {
   };
 
   const add = async () => {
-    const id = newId.trim().toLowerCase();
     const nickname = newNickname.trim();
-    const result = await run(() => api.addCircleMember(id, nickname || undefined));
+    const name = newName.trim();
+    const result = await run(() =>
+      api.addCircleMember(newContact.trim(), { ...(nickname ? { nickname } : {}), ...(name ? { name } : {}) }),
+    );
     if (result) {
-      setNewId('');
+      setNewContact('');
+      setNewName('');
       setNewNickname('');
     }
   };
@@ -87,25 +88,31 @@ export function Circle() {
 
       <h2 className="fs-section-title">Add someone</h2>
       <section className="fs-card">
-        {suggestions.length > 0 ? (
-          <div className="fs-row" style={{ flexWrap: 'wrap', gap: 8 }}>
-            {suggestions.map((p) => (
-              <Button key={p.id} variant="secondary" small pressed={newId === p.id} onClick={() => setNewId(p.id)}>
-                {p.firstName} {p.lastName}
-              </Button>
-            ))}
-          </div>
-        ) : null}
         <div className="fs-field">
-          <label htmlFor="fs-circle-id">Their FamilyShield ID</label>
+          <label htmlFor="fs-circle-contact">Their email or phone</label>
           <input
-            id="fs-circle-id"
+            id="fs-circle-contact"
             className="fs-input"
-            value={newId}
-            onChange={(e) => setNewId(e.target.value)}
+            value={newContact}
+            onChange={(e) => setNewContact(e.target.value)}
+            placeholder="grace.chen@example.com or (607) 555-0102"
+            autoComplete="off"
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
+          />
+          <span className="fs-tiny fs-muted">The one they use with their bank.</span>
+        </div>
+        <div className="fs-field">
+          <label htmlFor="fs-circle-name">
+            Their name <span className="fs-small fs-muted" style={{ fontWeight: 600 }}>· if they’re new to FamilyShield</span>
+          </label>
+          <input
+            id="fs-circle-name"
+            className="fs-input"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="e.g. Sam Rivera"
           />
         </div>
         <div className="fs-field">
@@ -120,12 +127,13 @@ export function Circle() {
             placeholder="e.g. Aunt Lisa"
           />
         </div>
-        <Button onClick={() => void add()} disabled={!newId.trim()}>
+        <Button onClick={() => void add()} disabled={!newContact.trim()}>
           Add to circle
         </Button>
         <DemoHint>
-          IDs are the <code>id</code> column of <code>data/people.csv</code> (for example <code>alex</code>, <code>mom</code>, <code>maya</code>,{' '}
-          <code>lisa</code>). A real bank would let you pick from your contacts instead.
+          Emails and phones are in <code>data/people.csv</code> (Lisa is <code>lisa.park@example.com</code> or <code>(607) 555-0104</code>). An email or
+          phone nobody has yet creates a new FamilyShield account for it. Later, they’ll get an invitation link, and only join once they verify their bank
+          account.
         </DemoHint>
       </section>
 
