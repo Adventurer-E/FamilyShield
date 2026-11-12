@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { DEFAULT_REASONS, formatDate, formatMoney } from '@familyshield/core';
-import type { BankDashboard as Dashboard, DashboardLoan, LoanStatus } from '@familyshield/core';
+import type { BankDashboard as Dashboard, DashboardCustomer, DashboardLoan, LoanStatus } from '@familyshield/core';
 import { host } from './host';
 
 /**
@@ -89,6 +89,26 @@ function Overdue({ loan }: { loan: DashboardLoan }) {
   );
 }
 
+/** One word for where a customer stands, overdue first. */
+function CustomerStatus({ person }: { person: DashboardCustomer }) {
+  if (person.overdue) {
+    return (
+      <span className="dash-status critical">
+        <AlertMark /> Restricted · {person.overdue.daysLate} days late
+      </span>
+    );
+  }
+  const label =
+    person.borrowing && person.borrowing.status !== 'repaid'
+      ? STATUS_LABEL[person.borrowing.status]
+      : person.lending.owedToThem > 0
+        ? 'Lending'
+        : person.borrowing || person.lending.loans
+          ? 'Up to date'
+          : 'Not using FamilyShield';
+  return <span className={`dash-status${label === 'Not using FamilyShield' ? ' quiet' : ''}`}>{label}</span>;
+}
+
 export function BankDashboard() {
   const { data, error } = useDashboard();
   if (error) return <div className="dash-empty" role="alert">Can’t load the dashboard. {error}</div>;
@@ -115,7 +135,11 @@ export function BankDashboard() {
       ) : null}
 
       <section className="dash-tiles" aria-label="Headline figures">
-        <Tile label="Lent by families" value={formatMoney(money.funded)} detail={`${plural(customers.lenders, 'lender')} · ${plural(customers.borrowers, 'borrower')}`} />
+        <Tile
+          label="Lent by families"
+          value={formatMoney(money.funded)}
+          detail={`${plural(customers.lenders, 'lender')} · ${plural(customers.borrowers, 'borrower')} of ${plural(data.people.length, 'customer')}`}
+        />
         <Tile label="Still owed to lenders" value={formatMoney(money.outstanding)} detail={`${formatMoney(money.repaidToLenders)} repaid so far`} />
         <Tile label="Service fees collected" value={formatMoney(money.feesCollected)} detail={`of ${formatMoney(money.feesContracted)} on signed loans`} />
         <Tile
@@ -191,6 +215,41 @@ export function BankDashboard() {
         ) : (
           <p className="dash-ok">No overdue payments. To see one, repay nothing and use <strong>+1 month</strong> in the top bar.</p>
         )}
+      </section>
+
+      <section className="dash-card" aria-labelledby="dash-people">
+        <h2 id="dash-people">Customers</h2>
+        <p className="dash-sub">
+          Every BlueRiver customer, whether or not they’ve used FamilyShield. Restricted customers first, then those borrowing or lending.
+        </p>
+        <div className="dash-table-wrap">
+          <table className="dash-table">
+            <thead>
+              <tr>
+                <th scope="col">Customer</th>
+                <th scope="col">Status</th>
+                <th scope="col" className="num">Circle</th>
+                <th scope="col" className="num">Left to repay</th>
+                <th scope="col">Next payment</th>
+                <th scope="col" className="num">Lent</th>
+                <th scope="col" className="num">Owed to them</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.people.map((p) => (
+                <tr key={p.personId}>
+                  <th scope="row">{p.name}</th>
+                  <td><CustomerStatus person={p} /></td>
+                  <td className="num">{p.circle}</td>
+                  <td className="num">{p.borrowing?.owed ? formatMoney(p.borrowing.owed) : '—'}</td>
+                  <td>{p.borrowing?.nextDue ? formatDate(p.borrowing.nextDue) : '—'}</td>
+                  <td className="num">{p.lending.lent ? formatMoney(p.lending.lent) : '—'}</td>
+                  <td className="num">{p.lending.owedToThem ? formatMoney(p.lending.owedToThem) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="dash-card" aria-labelledby="dash-all">
