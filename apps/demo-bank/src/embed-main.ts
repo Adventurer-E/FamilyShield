@@ -1,4 +1,5 @@
 import { bootEmbed } from '@familyshield/sdk/embed';
+import { readFreeOption, withFreeOption } from './freeOption';
 import { host } from './host';
 
 /**
@@ -10,5 +11,6 @@ import { host } from './host';
  */
 bootEmbed({
   allowedHostOrigins: [window.location.origin],
-  createApi: (session) => host.apiFor(String(session.userId)),
+  // Same origin as the bank page, so it sees the toolbar's Free option switch.
+  createApi: (session) => withFreeOption(host.apiFor(String(session.userId)), readFreeOption()),
 });

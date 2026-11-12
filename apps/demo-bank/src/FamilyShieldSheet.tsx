@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { mountFamilyShield } from '@familyshield/sdk';
 import type { BridgeMessage, HostEvent, InitMessage } from '@familyshield/sdk';
+import { withFreeOption } from './freeOption';
 import { host } from './host';
 
 export type EmbedMode = 'inline' | 'webview';
@@ -11,23 +12,30 @@ export type EmbedMode = 'inline' | 'webview';
  *  - webview: the standalone embed page in an iframe, talking over
  *             postMessage, the same protocol a native WebView uses
  */
-export function FamilyShieldSheet(props: { userId: string; mode: EmbedMode; onClose: () => void; onEvent: (e: HostEvent) => void }) {
+export function FamilyShieldSheet(props: {
+  userId: string;
+  mode: EmbedMode;
+  /** The toolbar's Free option switch; null follows settings.csv. */
+  freeOption: boolean | null;
+  onClose: () => void;
+  onEvent: (e: HostEvent) => void;
+}) {
   // Keep the latest callbacks without re-mounting the module.
   const handlers = useRef(props);
   handlers.current = props;
 
   const mountRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLIFrameElement>(null);
-  const { userId, mode } = props;
+  const { userId, mode, freeOption } = props;
 
   useEffect(() => {
     if (mode !== 'inline' || !mountRef.current) return;
     const handle = mountFamilyShield(mountRef.current, {
-      api: host.apiFor(userId),
+      api: withFreeOption(host.apiFor(userId), freeOption),
       onEvent: (event) => (event.type === 'close' ? handlers.current.onClose() : handlers.current.onEvent(event)),
     });
     return () => handle.unmount();
-  }, [mode, userId]);
+  }, [mode, userId, freeOption]);
 
   useEffect(() => {
     if (mode !== 'webview') return;
@@ -56,7 +64,7 @@ export function FamilyShieldSheet(props: { userId: string; mode: EmbedMode; onCl
       {mode === 'inline' ? (
         <div ref={mountRef} className="sheet-body" />
       ) : (
-        <iframe key={userId} ref={frameRef} className="sheet-body" title="FamilyShield" src="./embed.html" />
+        <iframe key={`${userId}:${freeOption}`} ref={frameRef} className="sheet-body" title="FamilyShield" src="./embed.html" />
       )}
     </div>
   );

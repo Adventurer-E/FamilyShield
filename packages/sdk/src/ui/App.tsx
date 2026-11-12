@@ -1,6 +1,6 @@
 import { defaultRole, useFs } from './context';
 import { BorrowerHome, LenderHome } from './screens/Home';
-import { Request } from './screens/Request';
+import { RequestEntry } from './screens/Choose';
 import { Offers } from './screens/Offers';
 import { Agreement } from './screens/Agreement';
 import { Repay } from './screens/Repay';
@@ -31,7 +31,7 @@ export function Screens() {
       // Replaced by a real home right after loading; this covers the first render.
       return defaultRole(data) === 'lender' ? <LenderHome /> : <BorrowerHome />;
     case 'request':
-      return open ? <BorrowerStep /> : <Request />;
+      return open ? <BorrowerStep /> : <RequestEntry />;
     case 'offers':
     case 'agreement':
     case 'repay':

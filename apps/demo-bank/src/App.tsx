@@ -7,6 +7,7 @@ import { BankHome, entrySubtitle } from './BankHome';
 import { CsvPanel } from './CsvPanel';
 import { FamilyShieldSheet } from './FamilyShieldSheet';
 import type { EmbedMode } from './FamilyShieldSheet';
+import { readFreeOption, saveFreeOption } from './freeOption';
 import { host } from './host';
 
 function remembered<T extends string>(key: string, fallback: T, allowed?: readonly T[]): T {
@@ -85,6 +86,9 @@ export function App() {
   const [view, setView] = useState<View>(() => remembered<View>('mockup-view', 'customer', ['customer', 'bank']));
   const [open, setOpen] = useState(false);
   const [csvOpen, setCsvOpen] = useState(false);
+  // Free option (fee experiment arm B): the toolbar switch, or null to follow settings.csv.
+  const [freeOption, setFreeOption] = useState<boolean | null>(() => readFreeOption());
+  const [freeOptionInData, setFreeOptionInData] = useState(false);
   const [toast, setToast] = useState<{ text: string; via: EmbedMode } | null>(null);
   const bank = useBankData(userId);
 
@@ -99,6 +103,15 @@ export function App() {
     if (bank.people.length && !bank.people.some((p) => p.id === userId)) setUserId(bank.people[0]!.id);
   }, [bank.people, userId]);
 
+  useEffect(() => {
+    host
+      .apiFor(userId)
+      .getConfig()
+      .then((c) => setFreeOptionInData(c.rules.showFreeOption))
+      .catch(() => {});
+  }, [userId]);
+  const freeOptionShown = freeOption ?? freeOptionInData;
+
   const me = bank.people.find((p) => p.id === userId);
 
   const switchUser = (id: string) => {
@@ -109,6 +122,10 @@ export function App() {
   const switchMode = (m: EmbedMode) => {
     setMode(m);
     remember('mockup-embed', m);
+  };
+  const switchFreeOption = (on: boolean) => {
+    setFreeOption(on);
+    saveFreeOption(on);
   };
   const switchView = (v: View) => {
     setView(v);
@@ -158,6 +175,13 @@ export function App() {
             +1 month
           </button>
         </div>
+        <div className="seg" role="group" aria-label="Free option (fee experiment)">
+          <span className="seg-label" title="Fee experiment: before a request, offer a choice between FamilyShield and arranging the loan for free">
+            Free option
+          </span>
+          <button type="button" aria-pressed={!freeOptionShown} onClick={() => switchFreeOption(false)}>Off</button>
+          <button type="button" aria-pressed={freeOptionShown} onClick={() => switchFreeOption(true)}>On</button>
+        </div>
         <button type="button" className="data-chip" onClick={() => setCsvOpen(true)} title="Where the data lives">
           <span className={`dot ${host.mode}`} aria-hidden="true" />
           {host.mode === 'server' ? 'Data: CSV files via server' : 'Data: CSV files in this browser'}
@@ -199,6 +223,7 @@ export function App() {
               <FamilyShieldSheet
                 userId={userId}
                 mode={mode}
+                freeOption={freeOption}
                 onClose={() => setOpen(false)}
                 onEvent={(e) => {
                   const text = toastFor(e);
@@ -224,7 +249,7 @@ export function App() {
                 request; offer or decline privately.
               </li>
               <li>Back as Alex, accept the offers and sign. Then switch to each lender, and they sign their own agreement.</li>
-              <li>Watch both balances move. Make payments (or skip to the last one), then claim a partner reward.</li>
+              <li>Watch the balances move. Make the payments, then claim a partner reward.</li>
               <li>
                 Or don’t pay: use <strong>+1 month</strong> above. A payment more than a few days late is overdue, and the borrower can’t offer to
                 lend to family until they catch up.
@@ -239,9 +264,14 @@ export function App() {
               in a frame and talks over postMessage, exactly like a native iOS/Android app would.
             </p>
             <p>
-            <strong>Bank dashboard</strong> (top bar) is what BlueRiver’s staff see: money lent and repaid, fees, on-time payments and overdue
-            loans across every customer.
-          </p>
+              <strong>Bank dashboard</strong> (top bar) is what BlueRiver’s staff see: money lent and repaid, fees, on-time payments and overdue
+              loans across every customer.
+            </p>
+            <p>
+              <strong>Free option</strong> is the fee experiment (hypothesis #8): when it’s on, starting a request first asks whether to use
+              FamilyShield or arrange the loan with family for free. Send participants a link ending in <code>?free_option=yes</code> or{' '}
+              <code>?free_option=no</code> to put them in one group.
+            </p>
           <p className="fine">All people, partners and money here are fictional. “Reset” goes back to the shared starting state in data/.</p>
           </aside>
         </div>
