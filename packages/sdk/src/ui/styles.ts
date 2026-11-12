@@ -32,6 +32,8 @@ export const styles = `
 .fs-card.brand { background: var(--fs-brand); color: var(--fs-on-brand); }
 .fs-card.soft { background: var(--fs-brand-soft); }
 .fs-card.night { background: var(--fs-night); color: #fff; }
+.fs-card.late { background: #FFF6E5; border: 1px solid #F0C36B; color: #5C3B00; }
+.fs-card.late .fs-h3 { color: #5C3B00; }
 .fs-card.flush { padding: 0; gap: 0; overflow: hidden; }
 .fs-card h2, .fs-card h3 { margin: 0; }
 .fs-h2 { font-size: 24px; font-weight: 800; line-height: 1.2; }
@@ -80,7 +82,6 @@ export const styles = `
 
 .fs-notice { display: flex; gap: 10px; background: #EEF1F6; border-radius: 14px; padding: 12px 14px; font-size: 13px; color: #3B4659; line-height: 1.5; }
 .fs-notice svg { flex-shrink: 0; margin-top: 1px; }
-.fs-notice.demo { background: #FFF6DB; color: #5C4300; }
 .fs-error { background: #FDECEC; color: #8A1C1C; border-radius: 14px; padding: 12px 14px; font-size: 14px; font-weight: 600; display: flex; gap: 10px; align-items: flex-start; }
 .fs-error button { margin-left: auto; border: none; background: transparent; font-weight: 800; color: inherit; cursor: pointer; }
 

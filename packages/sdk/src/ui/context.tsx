@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { FamilyShieldError } from '@familyshield/core';
-import type { LoanCase, PersonId } from '@familyshield/core';
+import type { Eligibility, LoanCase, PersonId } from '@familyshield/core';
 import type { AppConfig, FamilyShieldApi, Profile } from '../api/types';
 import type { HostEvent } from '../bridge';
 
@@ -29,6 +29,8 @@ export interface FsData {
   profile: Profile;
   myLoan: LoanCase | null;
   incoming: LoanCase[];
+  /** Whether I may start a request now (C1: eligibility rules). */
+  eligibility: Eligibility;
 }
 
 interface FsContext {
@@ -46,8 +48,6 @@ interface FsContext {
   /** Return to the current role's home, dropping everything above it. */
   goHome(): void;
   emit(event: HostEvent): void;
-  /** Show demo-only hints and shortcuts. */
-  demo: boolean;
   /** Run an API action with a busy state and a friendly error message. */
   run<T>(action: () => Promise<T>): Promise<T | undefined>;
   busy: boolean;
@@ -97,18 +97,23 @@ export function useFs(): FsContext {
 }
 
 async function fetchAll(api: FamilyShieldApi): Promise<FsData> {
-  const [config, profile, myLoan, incoming] = await Promise.all([api.getConfig(), api.getProfile(), api.getMyLoan(), api.getIncoming()]);
-  return { config, profile, myLoan, incoming };
+  const [config, profile, myLoan, incoming, eligibility] = await Promise.all([
+    api.getConfig(),
+    api.getProfile(),
+    api.getMyLoan(),
+    api.getIncoming(),
+    api.getEligibility(),
+  ]);
+  return { config, profile, myLoan, incoming, eligibility };
 }
 
 export function FamilyShieldProvider(props: {
   api: FamilyShieldApi;
   emit: (event: HostEvent) => void;
-  demo: boolean;
   initialRoute?: Route;
   children: (state: { ready: boolean; loadError: string | null }) => ReactNode;
 }) {
-  const { api, emit, demo } = props;
+  const { api, emit } = props;
   const [data, setData] = useState<FsData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   // Starts as `hub`; replaced with the right home once data has loaded (below).
@@ -211,7 +216,6 @@ export function FamilyShieldProvider(props: {
     switchRole,
     goHome: () => switchRole(role),
     emit,
-    demo,
     run,
     busy,
     error,

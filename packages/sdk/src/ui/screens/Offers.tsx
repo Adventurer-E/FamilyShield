@@ -1,7 +1,7 @@
 import { acceptedTotal, formatMoney } from '@familyshield/core';
 import type { LoanCase } from '@familyshield/core';
 import { useFs } from '../context';
-import { Avatar, Button, DemoHint, Notice, Screen } from '../kit';
+import { Avatar, Button, Notice, Screen } from '../kit';
 
 export function Offers({ loan }: { loan: LoanCase }) {
   const { api, run, go, goHome, nameOf } = useFs();
@@ -57,10 +57,6 @@ export function Offers({ loan }: { loan: LoanCase }) {
           <span className="fs-dot" aria-hidden="true" />
           Waiting for replies · {replied} of {loan.offers.length} replied
         </div>
-      ) : null}
-
-      {pending.length > 0 ? (
-        <DemoHint>Some of your circle answer automatically. To answer as someone else, switch users in the functional mockup bar.</DemoHint>
       ) : null}
 
       <div className="fs-between" style={{ padding: '4px 2px 0' }}>

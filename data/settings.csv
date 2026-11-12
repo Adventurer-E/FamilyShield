@@ -12,3 +12,4 @@ show_free_option,no,Experiment: before the request offer a choice between Family
 points_per_helper,100,Family points for each relative who funds the loan
 points_per_on_time_payment,80,Family points for each payment made on or before its due date
 points_on_full_repayment,200,Bonus family points when the loan is fully repaid
+overdue_grace_days,3,Days after a due date before an unpaid payment counts as overdue; until they catch up the borrower can't offer to lend

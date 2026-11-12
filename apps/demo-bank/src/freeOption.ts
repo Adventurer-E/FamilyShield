@@ -1,7 +1,7 @@
 import type { FamilyShieldApi } from '@familyshield/sdk';
 
 /**
- * The "Free option" switch on the functional mockup's toolbar: experiment arm B
+ * The "Free option" switch in the mockup's top bar: experiment arm B
  * (M5, hypothesis #8) shows the choice between FamilyShield and arranging the
  * loan for free before the request; arm A doesn't.
  *

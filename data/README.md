@@ -1,6 +1,6 @@
 # The CSV "fake database"
 
-FamilyShield's functional mockup has no real database server. Every number it
+FamilyShield's mockup has no real database server. Every number it
 shows comes from CSV files. Open any of them in Excel, Google Sheets, Numbers or
 a text editor.
 
@@ -18,7 +18,7 @@ developers and branches don't conflict over test data.
 
 | Command | What it does |
 | --- | --- |
-| `npm run data:reset` (or **Reset functional mockup**) | Throw away your working copy and start again from `data/` |
+| `npm run data:reset` (or **Reset** in the top bar) | Throw away your working copy and start again from `data/` |
 | `npm run data:status` | List the activity files where your copy differs from `data/` |
 | `npm run data:save` | Copy your working copy into `data/`, then review with `git diff data/` and commit. Use this to share a scenario (e.g. "a loan one payment from done") |
 
@@ -71,7 +71,8 @@ Extra columns are ignored.
 | `default_term_months` | Term the request screen starts at (must be one of `terms_months`) | `10` |
 | `lender_offer_amounts` | Quick-pick amounts a lender sees when offering, in dollars, separated by `\|`. Only amounts up to the request are shown; a "The full $X" choice appears when the request is larger than all of them | `250\|500\|1000` |
 | `max_pauses` | One-month pauses allowed per loan | `1` |
-| `show_free_option` | Experiment arm B (M5, hypothesis #8): before the request, the borrower chooses between FamilyShield (with its fee) and arranging the loan themselves for free. `yes` or `no`. The **Free option** switch on the functional mockup's toolbar overrides it in your browser; a link with `?free_option=yes` (arm B) or `?free_option=no` (arm A) sets that switch, to send participants straight into one arm | `no` |
+| `show_free_option` | Experiment arm B (M5, hypothesis #8): before the request, the borrower chooses between FamilyShield (with its fee) and arranging the loan themselves for free. `yes` or `no`. The **Free option** switch in the mockup's top bar overrides it in your browser; a link with `?free_option=yes` (arm B) or `?free_option=no` (arm A) sets that switch, to send participants straight into one arm | `no` |
+| `overdue_grace_days` | Days after a due date before an unpaid payment counts as **overdue**. Until they catch up, the borrower can't offer to lend | `3` |
 | `points_per_helper` | Points per relative who funds the loan | `100` |
 | `points_per_on_time_payment` | Points per on-time payment | `80` |
 | `points_on_full_repayment` | Bonus at full repayment | `200` |
@@ -104,8 +105,10 @@ Use `example.com` emails and `555-01xx` numbers so they stay fictional.
 | `auto_sign` | Sign the agreement automatically after the borrower signs |
 | `auto_approve_pause` | Approve pause requests automatically |
 
-Anyone not listed (Mom, in the default data) waits for a real person: switch to
-them in **Viewing as**.
+**Empty in the shared data**: nobody answers on their own, so every reply,
+signature and pause answer is made by switching to that person in **Viewing
+as**. Add a row to script someone, e.g. to demo the borrower's side alone;
+anyone not listed waits for a real person.
 
 ### `reasons.csv`: what can happen
 
@@ -134,7 +137,7 @@ loan is fully repaid **and** the family's points reach `points_needed`.
 The app writes these in your working copy (`data/local/`). The copies in
 `data/` are the shared starting state: header-only by default, so the story
 starts fresh. The exception is `circles.csv`, which starts with the demo
-family's circles. “Reset functional mockup” copies them over your working copy.
+family's circles. **Reset** in the top bar copies them over your working copy.
 Setup tables are untouched.
 
 | File | One row per | Columns |
@@ -151,6 +154,7 @@ Setup tables are untouched.
 | `pause_answers.csv` | lender's pause answer | `loan_id`, `lender_id`, `answer` (yes, no, or blank = not answered) |
 | `claimed_rewards.csv` | claimed offer | `loan_id`, `reward_id`, `code` |
 | `transactions.csv` | bank posting | `id`, `user_id`, `at`, `amount` (+ in, − out), `memo` |
+| `mockup_clock.csv` | the mockup's calendar | `days_ahead`: how many days the mockup runs ahead of the real date (**Skip ahead** in the top bar), so due dates pass and payments become overdue. Empty in the shared starting state, i.e. today |
 
 Tip: to build a scenario, e.g. a loan that's one payment from done, play it in
 the app until it's close, adjust `paid_at` dates or `points` in `data/local/`

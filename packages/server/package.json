@@ -2,7 +2,7 @@
   "name": "@familyshield/server",
   "version": "0.1.0",
   "private": true,
-  "description": "FamilyShield functional-mockup backend: the REST API from docs/API.md over the CSV files in data/.",
+  "description": "FamilyShield mockup backend: the REST API from docs/API.md over the CSV files in data/.",
   "type": "module",
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/index.ts",

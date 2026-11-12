@@ -33,14 +33,14 @@ and the **partner bank**, which owns identity, accounts and money movement.
 | `@familyshield/core` | Business rules as pure functions over a `LoanCase`; rules are a `Rules` object | nothing |
 | `@familyshield/service` | The backend: every API operation over the CSV database | core |
 | `@familyshield/server` | Node `http` server exposing the service as the REST API | service, core |
-| `@familyshield/sdk` | UI module, API adapters, host bridge, functional-mockup hosts | core, service, React |
+| `@familyshield/sdk` | UI module, API adapters, host bridge, mockup hosts | core, service, React |
 | `@familyshield/demo-bank` | Fictional host app (“BlueRiver Bank”) | sdk, core |
 
 The UI, the server and the in-browser backend all import `@familyshield/core`,
 so the client preview and the backend’s source of truth can never disagree
 about a fee or a due date.
 
-## The functional-mockup backend
+## The mockup backend
 
 ```
             ┌────────────── npm run dev ──────────────┐     ┌──────── GitHub Pages ────────┐
@@ -111,7 +111,7 @@ bank, which debits and credits accounts through its own rails.
 - At **each payment**, the bank debits the borrower’s installment, credits each
   lender their part, and credits FamilyShield the fee portion.
 
-In the functional mockup, the service simulates exactly these ledger
+In the mockup, the service simulates exactly these ledger
 postings (`settle()` in `packages/service/src/service.ts`) as rows in
 `data/transactions.csv`, which is why BlueRiver’s balances move.
 

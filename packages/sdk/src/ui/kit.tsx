@@ -79,24 +79,28 @@ export function Button(props: {
   );
 }
 
-export function Notice({ children, kind = 'privacy' }: { children: ReactNode; kind?: 'privacy' | 'info' | 'demo' }) {
+export function Notice({ children, kind = 'privacy' }: { children: ReactNode; kind?: 'privacy' | 'info' }) {
   return (
-    <div className={`fs-notice${kind === 'demo' ? ' demo' : ''}`}>
-      {kind === 'privacy' ? <LockIcon size={18} stroke="#163A70" /> : <InfoIcon size={18} stroke={kind === 'demo' ? '#7A4B00' : '#163A70'} />}
+    <div className="fs-notice">
+      {kind === 'privacy' ? <LockIcon size={18} stroke="#163A70" /> : <InfoIcon size={18} stroke="#163A70" />}
       <div>{children}</div>
     </div>
   );
 }
 
-/** Shown only when the module runs in demo mode. */
-export function DemoHint({ children }: { children: ReactNode }) {
-  const { demo } = useFs();
-  if (!demo) return null;
+/** Why the user can't start a request right now, one notice per reason. Renders nothing when eligible. */
+export function NotEligible({ hideOpenLoan }: { hideOpenLoan?: boolean }) {
+  const { data } = useFs();
+  const blocks = data.eligibility.blocks.filter((b) => !(hideOpenLoan && b.code === 'open-loan'));
+  if (blocks.length === 0) return null;
   return (
-    <Notice kind="demo">
-      <strong>Functional mockup: </strong>
-      {children}
-    </Notice>
+    <div className="fs-stack" style={{ gap: 8 }} role="status">
+      {blocks.map((b) => (
+        <Notice key={b.code} kind="info">
+          {b.message}
+        </Notice>
+      ))}
+    </div>
   );
 }
 

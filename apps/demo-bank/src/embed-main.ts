@@ -3,7 +3,7 @@ import { readFreeOption, withFreeOption } from './freeOption';
 import { host } from './host';
 
 /**
- * The embed page as the functional mockup serves it (the "WebView" mode).
+ * The embed page as the mockup serves it (the "WebView" mode).
  * It uses the same data as the bank page: the backend server in server mode,
  * or this browser's CSVs in browser mode. In production this page lives on
  * FamilyShield's own domain and builds an HttpApi from the session token

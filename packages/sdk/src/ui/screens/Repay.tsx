@@ -1,29 +1,23 @@
 import { formatDate, formatMoney, nextInstallment, pointsToGo, repaymentSummary, rewardStatus } from '@familyshield/core';
 import type { LoanCase } from '@familyshield/core';
 import { useFs } from '../context';
-import { Button, DemoHint, Progress, Screen } from '../kit';
-import { CheckIcon, PauseIcon, StarIcon } from '../icons';
+import { Button, Progress, Screen } from '../kit';
+import { AlertIcon, CheckIcon, PauseIcon, StarIcon } from '../icons';
 
 export function Repay({ loan }: { loan: LoanCase }) {
-  const { api, run, go, emit, nameOf, demo, data } = useFs();
+  const { api, run, go, emit, nameOf, data } = useFs();
   const { rules, rewards: REWARDS } = data.config;
   const s = repaymentSummary(loan);
   const next = nextInstallment(loan);
   const repaid = loan.status === 'repaid';
   const unlocked = REWARDS.filter((r) => ['available', 'claimed'].includes(rewardStatus(loan, r)));
   const pause = loan.pause;
+  // C2: payments past due (and past the grace days) on this loan.
+  const overdue = data.eligibility.overdue;
 
   const pay = async () => {
     const after = await run(() => api.makePayment(loan.id));
     if (after && next) emit({ type: 'payment.made', loanId: loan.id, amount: next.amount, remaining: repaymentSummary(after).remaining });
-  };
-
-  // Demo only: run the remaining payments back to back.
-  const payAll = async () => {
-    let current: LoanCase | undefined = loan;
-    while (current && current.status === 'active') {
-      current = await run(() => api.makePayment(loan.id));
-    }
   };
 
   return (
@@ -45,15 +39,35 @@ export function Repay({ loan }: { loan: LoanCase }) {
         </section>
       ) : null}
 
+      {!repaid && overdue ? (
+        <section className="fs-card late" role="alert" aria-labelledby="fs-late">
+          <h2 id="fs-late" className="fs-h3">
+            {overdue.installments.length === 1 ? `Payment ${overdue.installments[0]} is late` : `${overdue.installments.length} payments are late`}
+          </h2>
+          <p className="fs-small" style={{ margin: 0 }}>
+            Due {formatDate(overdue.since)}, {overdue.daysLate} day{overdue.daysLate === 1 ? '' : 's'} ago. Pay {formatMoney(overdue.amount)} to catch up.
+            Until then you can’t offer to lend to family.
+          </p>
+          <Button onClick={pay}>Pay {next ? formatMoney(next.amount) : ''} now</Button>
+        </section>
+      ) : null}
+
       <section className="fs-card">
         <div className="fs-row">
-          <span className="fs-avatar" style={{ background: 'var(--fs-brand)', color: '#fff', border: 'none', width: 32, height: 32 }}>
-            <CheckIcon size={18} />
+          <span
+            className="fs-avatar"
+            style={{ background: overdue && !repaid ? '#B86E00' : 'var(--fs-brand)', color: '#fff', border: 'none', width: 32, height: 32 }}
+          >
+            {overdue && !repaid ? <AlertIcon size={18} stroke="#fff" /> : <CheckIcon size={18} />}
           </span>
           <div className="fs-grow">
-            <div style={{ fontWeight: 800 }}>{repaid ? 'Fully repaid' : pause?.status === 'pending' ? 'Pause requested' : 'On track'}</div>
+            <div style={{ fontWeight: 800 }}>{repaid ? 'Fully repaid' : overdue ? 'Behind on payments' : pause?.status === 'pending' ? 'Pause requested' : 'On track'}</div>
             <div className="fs-small fs-muted">
-              {repaid ? `Finished ${loan.repaidAt ? formatDate(loan.repaidAt.slice(0, 10)) : ''}` : s.paymentsMade ? `${s.paymentsMade} payment${s.paymentsMade === 1 ? '' : 's'} made` : `Autopay starts ${next ? formatDate(next.dueDate) : ''}`}
+              {repaid
+                ? `Finished ${loan.repaidAt ? formatDate(loan.repaidAt.slice(0, 10)) : ''}`
+                : s.paymentsMade || overdue
+                  ? `${s.paymentsMade} payment${s.paymentsMade === 1 ? '' : 's'} made`
+                  : `Autopay starts ${next ? formatDate(next.dueDate) : ''}`}
             </div>
           </div>
         </div>
@@ -77,7 +91,7 @@ export function Repay({ loan }: { loan: LoanCase }) {
               <div style={{ fontSize: 24, fontWeight: 800 }}>{formatMoney(next.amount)}</div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div className="fs-tiny fs-muted" style={{ fontWeight: 700 }}>AUTOPAY ON</div>
+              <div className="fs-tiny fs-muted" style={{ fontWeight: 700 }}>{overdue ? 'WAS DUE' : 'AUTOPAY ON'}</div>
               <div style={{ fontWeight: 700 }}>{formatDate(next.dueDate)}</div>
             </div>
           </div>
@@ -86,11 +100,6 @@ export function Repay({ loan }: { loan: LoanCase }) {
             {next.parts.map((p) => `${p.to === 'fee' ? 'service fee' : nameOf(p.to)} ${formatMoney(p.amount)}`).join(' · ')}
           </div>
           <Button onClick={pay}>Pay {formatMoney(next.amount)} now</Button>
-          {demo ? (
-            <Button variant="ghost" onClick={payAll}>
-              Functional mockup: make all remaining payments
-            </Button>
-          ) : null}
 
           {pause?.status === 'pending' ? (
             <div className="fs-small" style={{ border: '1px dashed #B6BFCD', borderRadius: 12, padding: 12, color: '#3B4659' }}>
@@ -117,7 +126,6 @@ export function Repay({ loan }: { loan: LoanCase }) {
           {pause?.status === 'declined' ? (
             <div className="fs-tiny fs-muted">Your last pause request wasn’t approved. Your schedule is unchanged.</div>
           ) : null}
-          {pause?.status === 'pending' ? <DemoHint>Switch users in the functional mockup bar to answer the pause as a lender.</DemoHint> : null}
         </section>
       ) : null}
 

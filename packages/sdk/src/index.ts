@@ -4,7 +4,7 @@
  *  - mountFamilyShield(el, config): render inside the bank's web or hybrid app
  *  - bootEmbed(options), from "@familyshield/sdk/embed": the page a native app loads in a WebView
  *  - HttpApi: production backend adapter
- *  - createServerMockup() / createBrowserMockup(), from "@familyshield/sdk/mockup": functional-mockup hosts
+ *  - createServerMockup() / createBrowserMockup(), from "@familyshield/sdk/mockup": mockup hosts
  */
 export { mountFamilyShield, FamilyShieldApp } from './mount';
 export type { FamilyShieldConfig, FamilyShieldHandle } from './mount';

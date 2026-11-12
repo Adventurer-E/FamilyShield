@@ -17,8 +17,6 @@ export interface FamilyShieldConfig {
   onEvent?: (event: HostEvent) => void;
   /** Partner-bank colors; see theme.ts for every token. */
   theme?: Partial<Theme>;
-  /** Show demo hints and shortcuts. Never enable in production. */
-  demo?: boolean;
   /** Open on a specific screen, e.g. a lender tapping a push notification. */
   initialRoute?: Route;
   /**
@@ -34,12 +32,12 @@ export interface FamilyShieldHandle {
 
 /** The React tree, shared by the inline mount and the embed page. */
 export function FamilyShieldApp(props: Omit<FamilyShieldConfig, 'shadow'>) {
-  const { api, onEvent, demo = false, initialRoute } = props;
+  const { api, onEvent, initialRoute } = props;
   const emit = useMemo(() => (event: HostEvent) => onEvent?.(event), [onEvent]);
   const vars = useMemo(() => themeToCss(props.theme), [props.theme]);
   return (
     <div className="fs-root" style={cssVars(vars)}>
-      <FamilyShieldProvider api={api} emit={emit} demo={demo} initialRoute={initialRoute}>
+      <FamilyShieldProvider api={api} emit={emit} initialRoute={initialRoute}>
         {({ ready, loadError }) =>
           ready ? (
             <Screens />
@@ -92,7 +90,7 @@ export function mountFamilyShield(element: HTMLElement, config: FamilyShieldConf
   const root = createRoot(container);
   root.render(
     <StrictMode>
-      <FamilyShieldApp api={config.api} onEvent={config.onEvent} theme={config.theme} demo={config.demo} initialRoute={config.initialRoute} />
+      <FamilyShieldApp api={config.api} onEvent={config.onEvent} theme={config.theme} initialRoute={config.initialRoute} />
     </StrictMode>,
   );
 

@@ -1,7 +1,7 @@
 import type { Cents } from './money';
 
 /**
- * The business rules. In the functional mockup they come from
+ * The business rules. In the mockup they come from
  * data/settings.csv, so they can be tuned without touching code; these
  * defaults match the FamilyShield deck and are used when nothing else is given.
  */
@@ -26,6 +26,8 @@ export interface Rules {
    * FamilyShield and arranging the loan informally (free). Off by default.
    */
   showFreeOption: boolean;
+  /** Days after a due date before an unpaid installment counts as overdue (see overdue.ts). */
+  overdueGraceDays: number;
   /** Family points. Points belong to the whole circle on a loan, not one person. */
   points: {
     /** Per family member who funds the loan, awarded when the loan goes live. */
@@ -48,6 +50,7 @@ export const DEFAULT_RULES: Rules = {
   offerAmounts: [25_000, 50_000, 100_000], // $250, $500, $1,000
   maxPauses: 1,
   showFreeOption: false,
+  overdueGraceDays: 0,
   points: { help: 100, onTime: 80, complete: 200 },
 };
 

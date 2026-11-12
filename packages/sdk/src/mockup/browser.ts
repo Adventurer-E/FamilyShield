@@ -4,7 +4,7 @@ import type { FamilyShieldApi } from '../api/types';
 import type { MockupHost } from './types';
 
 /**
- * Functional mockup with no server, e.g. on GitHub Pages. It runs the same
+ * The mockup with no server, e.g. on GitHub Pages. It runs the same
  * backend logic (FamilyShieldService) in the browser:
  *
  *  - setup tables (people, settings, reasons, rewards, auto replies) come
@@ -105,6 +105,7 @@ export function createBrowserMockup(options: { files: CsvFiles; storageKey?: str
         getProfile: () => async(() => service.profile(userId)),
         getMyLoan: () => async(() => service.myLoan(userId)),
         getIncoming: () => async(() => service.incoming(userId)),
+        getEligibility: () => async(() => service.eligibility(userId)),
         createRequest: (input) => async(() => service.createRequest(userId, input)),
         cancelRequest: (id) => async(() => service.cancelRequest(userId, id)),
         setOfferAccepted: (id, memberId, accepted) => async(() => service.setOfferAccepted(userId, id, memberId, accepted)),
@@ -128,6 +129,9 @@ export function createBrowserMockup(options: { files: CsvFiles; storageKey?: str
     },
     people: () => async(() => service.people()),
     account: (userId) => async(() => service.account(userId)),
+    bankDashboard: () => async(() => service.bankDashboard()),
+    clock: () => async(() => service.mockupClock()),
+    skipAhead: (days) => async(() => service.skipAhead(days)),
     reset: () => async(() => service.reset()),
     subscribe(listener) {
       listeners.add(listener);
