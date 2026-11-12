@@ -14,7 +14,13 @@ import type { LoanCase, Rules } from '../src';
 
 const rules: Rules = { ...DEFAULT_RULES, overdueGraceDays: 3 };
 const T = '2026-11-05T15:00:00.000Z';
-const names = { alex: 'Alex Chen', mom: 'Grace Chen', maya: 'Maya Lin', lisa: 'Lisa Park' };
+const customers = [
+  { id: 'alex', name: 'Alex Chen', circle: 3 },
+  { id: 'mom', name: 'Grace Chen', circle: 2 },
+  { id: 'maya', name: 'Maya Lin', circle: 1 },
+  { id: 'lisa', name: 'Lisa Park', circle: 0 },
+  { id: 'sam', name: 'Sam Ortiz', circle: 0 },
+];
 
 const request = (id: string, borrowerId: string, amount: number, months: number, circle: string[], now = T) =>
   createLoanCase({ id, borrowerId, circle, reason: 'car', purpose: 'private words', amount, months, now }, rules);
@@ -42,7 +48,7 @@ describe('the bank dashboard', () => {
   while (lisa.status === 'active') lisa = recordPayment(lisa, '2026-11-20T12:00:00.000Z', rules);
   const mom = request('mom1', 'mom', 50_000, 6, ['alex', 'lisa'], '2027-01-10T09:00:00.000Z');
   const maya = cancelRequest(request('maya1', 'maya', 50_000, 6, ['alex']));
-  const d = bankDashboard({ today: '2027-01-20', loans: [lisa, mom, maya, alex], names }, rules);
+  const d = bankDashboard({ today: '2027-01-20', loans: [lisa, mom, maya, alex], customers }, rules);
 
   it('counts requests by status, cancelled included', () => {
     expect(d.requests).toEqual({ total: 4, byStatus: { collecting: 1, signing: 0, active: 1, repaid: 1, cancelled: 1 } });
@@ -85,14 +91,33 @@ describe('the bank dashboard', () => {
     expect(d.loans[1]).toMatchObject({ status: 'collecting', funded: 0, people: 2 });
   });
 
+  it('lists every customer, restricted first, then those using FamilyShield, then the rest', () => {
+    expect(d.people.map((p) => p.name)).toEqual(['Alex Chen', 'Grace Chen', 'Lisa Park', 'Maya Lin', 'Sam Ortiz']);
+    const [alexRow, momRow, lisaRow, mayaRow, samRow] = d.people;
+    expect(alexRow).toEqual({
+      personId: 'alex',
+      name: 'Alex Chen',
+      circle: 3,
+      borrowing: { loanId: 'alex1', status: 'active', owed: 157_500 - 26_250, nextDue: '2027-01-05' },
+      lending: { loans: 0, lent: 0, owedToThem: 0 },
+      overdue: { amount: 26_250, daysLate: 15 },
+    });
+    // Mom lent on both funded loans: $900 to Alex (one payment back), $1,000 to Lisa (repaid).
+    expect(momRow).toMatchObject({ borrowing: { status: 'collecting', owed: 0 }, lending: { loans: 2, lent: 190_000, owedToThem: 75_000 } });
+    expect(lisaRow).toMatchObject({ borrowing: { status: 'repaid', owed: 0 } });
+    expect(mayaRow).toMatchObject({ borrowing: null, lending: { loans: 1, lent: 60_000, owedToThem: 50_000 } }); // her own request was cancelled
+    expect(samRow).toEqual({ personId: 'sam', name: 'Sam Ortiz', circle: 0, borrowing: null, lending: { loans: 0, lent: 0, owedToThem: 0 } });
+  });
+
   it('never shows what a request was for', () => {
     expect(JSON.stringify(d)).not.toContain('private words');
   });
 
   it('is all zeros before anyone uses FamilyShield', () => {
-    const empty = bankDashboard({ today: '2026-11-05', loans: [], names }, rules);
+    const empty = bankDashboard({ today: '2026-11-05', loans: [], customers }, rules);
     expect(empty.payments.onTimeRate).toBeNull();
     expect(empty.money.funded).toBe(0);
     expect(empty.loans).toEqual([]);
+    expect(empty.people).toHaveLength(5);
   });
 });

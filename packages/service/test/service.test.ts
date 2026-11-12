@@ -495,6 +495,8 @@ describe('the bank dashboard', () => {
   it('follows the family story', () => {
     const { svc, advance } = setup();
     expect(svc.bankDashboard().requests.total).toBe(0);
+    // Everyone at the bank is listed, not only people who have borrowed.
+    expect(svc.bankDashboard().people.map((p) => p.name)).toEqual(['Alex Chen', 'Grace Chen', 'Lisa Park', 'Maya Lin']);
     const loan = svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 100_000, months: 6 });
     advance(5_000);
     svc.setOfferAccepted('alex', loan.id, 'maya', true);

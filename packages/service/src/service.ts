@@ -259,8 +259,12 @@ export class FamilyShieldService {
    */
   bankDashboard(): BankDashboard {
     const db = this.open();
-    const names = Object.fromEntries(db.people.map((p) => [p.id, `${p.firstName} ${p.lastName}`.trim()]));
-    return bankDashboard({ today: toIsoDate(this.now()), loans: db.loans, names }, db.rules);
+    const customers = db.people.map((p) => ({
+      id: p.id,
+      name: `${p.firstName} ${p.lastName}`.trim(),
+      circle: db.circles.filter((c) => c.ownerId === p.id).length,
+    }));
+    return bankDashboard({ today: toIsoDate(this.now()), loans: db.loans, customers }, db.rules);
   }
 
   /** Functional mockup only: the date the mockup is on, and how far it runs ahead of today. */

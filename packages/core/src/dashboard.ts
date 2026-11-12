@@ -37,6 +37,32 @@ export interface DashboardLoan {
   overdue?: { amount: Cents; installments: number[]; since: IsoDate; daysLate: number };
 }
 
+/** One bank customer, whether or not they've used FamilyShield yet. */
+export interface DashboardCustomer {
+  personId: PersonId;
+  name: string;
+  /** People in their trusted circle. */
+  circle: number;
+  /** Their latest request or loan as borrower (not cancelled), or null. */
+  borrowing: {
+    loanId: string;
+    status: LoanStatus;
+    /** Left to repay, fee included. 0 before the loan is signed. */
+    owed: Cents;
+    nextDue?: IsoDate;
+  } | null;
+  /** Their lending across every signed loan. */
+  lending: {
+    /** Signed loans they lent on. */
+    loans: number;
+    lent: Cents;
+    /** Still owed back to them. */
+    owedToThem: Cents;
+  };
+  /** Set when a payment on their own loan is overdue: they can't offer to lend until they catch up. */
+  overdue?: { amount: Cents; daysLate: number };
+}
+
 export interface BankDashboard {
   /** The date the figures are for. */
   asOf: IsoDate;
@@ -82,18 +108,21 @@ export interface BankDashboard {
   };
   /** Every request that wasn't cancelled: overdue first (most days late first), then newest first. */
   loans: DashboardLoan[];
+  /** Every customer: restricted (overdue) first, then those using FamilyShield, then everyone else; by name within each. */
+  people: DashboardCustomer[];
 }
 
 export interface DashboardInput {
   today: IsoDate;
   loans: LoanCase[];
-  /** Display names for borrowers, by person id. */
-  names: Record<PersonId, string>;
+  /** Every bank customer, with the size of their trusted circle. */
+  customers: Array<{ id: PersonId; name: string; circle: number }>;
 }
 
 const STATUSES: LoanStatus[] = ['collecting', 'signing', 'active', 'repaid', 'cancelled'];
 
 export function bankDashboard(input: DashboardInput, rules: Rules = DEFAULT_RULES): BankDashboard {
+  const names: Record<PersonId, string> = Object.fromEntries(input.customers.map((c) => [c.id, c.name]));
   const live = input.loans.filter((l) => l.status !== 'cancelled');
   const funded = live.filter((l) => l.fundedAt);
   const paidInstallments = funded.flatMap((l) => l.schedule.filter((i) => i.paidAt));
@@ -109,7 +138,7 @@ export function bankDashboard(input: DashboardInput, rules: Rules = DEFAULT_RULE
     return {
       loanId: l.id,
       borrowerId: l.borrowerId,
-      borrowerName: input.names[l.borrowerId] ?? l.borrowerId,
+      borrowerName: names[l.borrowerId] ?? l.borrowerId,
       status: l.status,
       reason: l.reason,
       createdAt: l.createdAt,
@@ -125,6 +154,33 @@ export function bankDashboard(input: DashboardInput, rules: Rules = DEFAULT_RULE
   rows.sort((a, b) => (b.overdue?.daysLate ?? -1) - (a.overdue?.daysLate ?? -1) || b.createdAt.localeCompare(a.createdAt));
 
   const overdueRows = rows.filter((r) => r.overdue);
+
+  const people: DashboardCustomer[] = input.customers.map((c): DashboardCustomer => {
+    // Rows are newest first, so the first one of theirs is their latest request or loan.
+    const mine = rows.find((r) => r.borrowerId === c.id);
+    const late = rows.find((r) => r.borrowerId === c.id && r.overdue)?.overdue;
+    const lentOn = funded.filter((l) => l.agreements.some((a) => a.lenderId === c.id));
+    const lentOnLoan = (l: LoanCase) => l.agreements.find((a) => a.lenderId === c.id)!.principal;
+    const receivedOnLoan = (l: LoanCase) =>
+      sum(l.schedule.filter((i) => i.paidAt).flatMap((i) => i.parts.filter((p) => p.to === c.id)).map((p) => p.amount));
+    const active = lentOn.filter((l) => l.status === 'active');
+    return {
+      personId: c.id,
+      name: c.name,
+      circle: c.circle,
+      borrowing: mine
+        ? { loanId: mine.loanId, status: mine.status, owed: mine.total - mine.paid, ...(mine.nextDue ? { nextDue: mine.nextDue } : {}) }
+        : null,
+      lending: {
+        loans: lentOn.length,
+        lent: sum(lentOn.map(lentOnLoan)),
+        owedToThem: sum(active.map((l) => lentOnLoan(l) - receivedOnLoan(l))),
+      },
+      ...(late ? { overdue: { amount: late.amount, daysLate: late.daysLate } } : {}),
+    };
+  });
+  const group = (p: DashboardCustomer) => (p.overdue ? 0 : p.borrowing || p.lending.loans ? 1 : 2);
+  people.sort((a, b) => group(a) - group(b) || a.name.localeCompare(b.name));
   const overdueLoans = funded.filter((l) => overdueRows.some((r) => r.loanId === l.id));
   const onTime = paidInstallments.filter((i) => i.onTime).length;
 
@@ -159,5 +215,6 @@ export function bankDashboard(input: DashboardInput, rules: Rules = DEFAULT_RULE
       atRisk: sum(overdueLoans.map((l) => principal(l) - repaidToLenders(l))),
     },
     loans: rows,
+    people,
   };
 }

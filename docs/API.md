@@ -131,7 +131,7 @@ the functional mockup has no staff sign-in.
 
 | Method & path | Returns | Notes |
 | --- | --- | --- |
-| `GET /bank/dashboard` | `BankDashboard` | Activity and risk figures across every loan, as of the bank's date (`bankDashboard` in `packages/core/src/dashboard.ts`): `customers` (borrowers, lenders, restricted), `requests` (total and by status), `money` (requested, funded, repaid to lenders, outstanding, fees collected and contracted), `payments` (made, on time, late, on-time rate), `overdue` (loans, amount to catch up, principal at risk), and `loans`: one row per request that wasn't cancelled, overdue first. Amounts in cents |
+| `GET /bank/dashboard` | `BankDashboard` | Activity and risk figures across every loan, as of the bank's date (`bankDashboard` in `packages/core/src/dashboard.ts`): `customers` (borrowers, lenders, restricted), `requests` (total and by status), `money` (requested, funded, repaid to lenders, outstanding, fees collected and contracted), `payments` (made, on time, late, on-time rate), `overdue` (loans, amount to catch up, principal at risk), `loans`: one row per request that wasn't cancelled, overdue first, and `people`: **every** customer (circle size, their latest request or loan and what's left to repay, what they lent and are still owed, overdue), restricted first. Amounts in cents |
 
 The bank sees its customers' names, amounts, status and payment history, but
 not what a request was for or the notes family members wrote to each other.
