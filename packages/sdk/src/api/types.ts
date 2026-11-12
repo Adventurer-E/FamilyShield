@@ -1,6 +1,6 @@
-import type { AppConfig, CreateRequestInput, LenderResponse, LoanCase, Person, Profile } from '@familyshield/core';
+import type { AppConfig, CreateRequestInput, Eligibility, LenderResponse, LoanCase, Person, Profile } from '@familyshield/core';
 
-export type { AppConfig, CreateRequestInput, Profile };
+export type { AppConfig, CreateRequestInput, Eligibility, Profile };
 
 /**
  * The contract between the FamilyShield UI and a backend. Every call is made
@@ -25,6 +25,8 @@ export interface FamilyShieldApi {
    * returns them redacted: other members' offers are removed.
    */
   getIncoming(): Promise<LoanCase[]>;
+  /** Whether I may start a request now, and if not, every reason why (settings: eligibility rules). */
+  getEligibility(): Promise<Eligibility>;
 
   // Borrower
   createRequest(input: CreateRequestInput): Promise<LoanCase>;

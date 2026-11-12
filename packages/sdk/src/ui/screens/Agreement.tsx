@@ -1,14 +1,15 @@
-import { addMonths, draftAgreements, formatDate, formatMoney, sum, toIsoDate } from '@familyshield/core';
+import { addMonths, draftAgreements, formatDate, formatMoney, sum } from '@familyshield/core';
 import type { Agreement as AgreementT, LoanCase } from '@familyshield/core';
 import { useFs } from '../context';
 import { Button, DemoHint, Notice, Screen, Terms } from '../kit';
 import { DocIcon } from '../icons';
 
 export function AgreementDoc(props: { agreement: AgreementT; months: number; borrowerId: string; firstDue?: string }) {
-  const { fullNameOf, nameOf } = useFs();
+  const { fullNameOf, nameOf, data } = useFs();
   const { agreement: a, months } = props;
   const monthly = Math.ceil(a.total / months);
-  const start = props.firstDue ?? addMonths(toIsoDate(new Date()), 1);
+  // The bank's date (the functional mockup can skip ahead), not the browser's.
+  const start = props.firstDue ?? addMonths(data.eligibility.today, 1);
   return (
     <article className="fs-card outline flush">
       <div className="fs-doc-head">

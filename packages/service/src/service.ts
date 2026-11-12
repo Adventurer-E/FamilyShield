@@ -1,13 +1,15 @@
 import {
   FamilyShieldError,
+  assertEligible,
   cancelPause,
+  checkEligibility,
   cancelRequest,
   claimReward,
   createLoanCase,
   getReward,
-  isOpen,
   recordPayment,
   requestPause,
+  toIsoDate,
   respondToPause,
   respondToRequest,
   setOfferAccepted,
@@ -18,7 +20,9 @@ import {
 import type {
   AccountSummary,
   AppConfig,
+  MockupClock,
   CreateRequestInput,
+  Eligibility,
   LenderResponse,
   LoanCase,
   MockupPerson,
@@ -81,7 +85,10 @@ export function redactForLender(loan: LoanCase, viewerId: string): LoanCase {
  */
 export class FamilyShieldService {
   private readonly storage: CsvStorage;
+  /** The current time, including the functional mockup's "Skip ahead" days. */
   private readonly now: () => Date;
+  /** Set from mockup_clock.csv each time the database is read. */
+  private daysAhead = 0;
   private readonly random: () => number;
   private readonly autoSignDelayMs: number;
   private readonly autoPauseDelayMs: number;
@@ -89,7 +96,8 @@ export class FamilyShieldService {
 
   constructor(storage: CsvStorage, options: ServiceOptions = {}) {
     this.storage = storage;
-    this.now = options.now ?? (() => new Date());
+    const realNow = options.now ?? (() => new Date());
+    this.now = () => new Date(realNow().getTime() + this.daysAhead * 86_400_000);
     this.random = options.random ?? Math.random;
     this.autoSignDelayMs = options.autoSignDelayMs ?? 1_500;
     this.autoPauseDelayMs = options.autoPauseDelayMs ?? 1_500;
@@ -107,9 +115,16 @@ export class FamilyShieldService {
     return `${prefix}_${this.now().getTime().toString(36)}${rand}${this.seq}`;
   }
 
+  /** Read the CSVs and sync the mockup clock. Every operation starts here. */
+  private read(): Database {
+    const db = readDatabase(this.storage.read());
+    this.daysAhead = db.clockDaysAhead;
+    return db;
+  }
+
   /** Load the database and apply any scripted actions that are due. */
   private open(): Database {
-    const db = readDatabase(this.storage.read());
+    const db = this.read();
     if (this.automate(db)) this.storage.write(writeActivity(db));
     return db;
   }
@@ -221,7 +236,7 @@ export class FamilyShieldService {
 
   /** Apply due scripted actions. Hosts call this on a short interval. */
   tick(): boolean {
-    const db = readDatabase(this.storage.read());
+    const db = this.read();
     const changed = this.automate(db);
     if (changed) this.storage.write(writeActivity(db));
     return changed;
@@ -231,6 +246,26 @@ export class FamilyShieldService {
   reset(): void {
     if (this.storage.reset) this.storage.reset();
     else this.storage.write(emptyActivity());
+  }
+
+  /** Functional mockup only: the date the mockup is on, and how far it runs ahead of today. */
+  mockupClock(): MockupClock {
+    this.read();
+    return { today: toIsoDate(this.now()), daysAhead: this.daysAhead };
+  }
+
+  /**
+   * Functional mockup only: move the mockup's calendar forward, e.g. a month, so
+   * due dates pass and unpaid installments become overdue. "Reset" goes back to today.
+   */
+  skipAhead(days: number): MockupClock {
+    if (!Number.isInteger(days) || days < 1 || days > 366) throw new FamilyShieldError('INVALID_INPUT', 'Skip ahead between 1 and 366 days.');
+    const db = this.read();
+    db.clockDaysAhead += days;
+    this.daysAhead = db.clockDaysAhead;
+    this.automate(db);
+    this.storage.write(writeActivity(db));
+    return { today: toIsoDate(this.now()), daysAhead: this.daysAhead };
   }
 
   people(): MockupPerson[] {
@@ -293,14 +328,29 @@ export class FamilyShieldService {
       .reverse();
   }
 
+  private eligibilityOf(db: Database, userId: string): Eligibility {
+    return checkEligibility(
+      {
+        today: toIsoDate(this.now()),
+        loans: db.loans.filter((l) => l.borrowerId === userId),
+      },
+      db.rules,
+    );
+  }
+
+  /** Whether the caller may start a request or offer to lend now, and if not, why. */
+  eligibility(userId: string): Eligibility {
+    const db = this.open();
+    this.user(db, userId);
+    return this.eligibilityOf(db, userId);
+  }
+
   // ------------------------------------------------------------ borrower
 
   createRequest(userId: string, input: CreateRequestInput): LoanCase {
     const db = this.open();
     this.user(db, userId);
-    if (db.loans.some((l) => l.borrowerId === userId && isOpen(l))) {
-      throw new FamilyShieldError('INVALID_STATE', 'You already have an open request or loan.');
-    }
+    assertEligible(this.eligibilityOf(db, userId));
     const loan = createLoanCase(
       {
         id: this.id('loan'),
@@ -364,6 +414,11 @@ export class FamilyShieldService {
   // ------------------------------------------------------------ lender
 
   respond(userId: string, loanId: string, response: LenderResponse) {
+    if (response.kind === 'offer') {
+      // C2: someone behind on their own family loan can't offer to lend (declining is always fine).
+      const { lending } = this.eligibility(userId);
+      if (!lending.allowed) throw new FamilyShieldError('NOT_ELIGIBLE', lending.message);
+    }
     return redactForLender(this.mutate(loanId, (l) => respondToRequest(l, userId, response, this.iso()), this.asLender(userId)), userId);
   }
   signAsLender(userId: string, loanId: string) {

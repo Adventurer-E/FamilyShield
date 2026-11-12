@@ -5,6 +5,8 @@ export * from './errors';
 export * from './types';
 export * from './loan';
 export * from './selectors';
+export * from './overdue';
+export * from './eligibility';
 export * from './rewards';
 export * from './reasons';
 export * from './api';

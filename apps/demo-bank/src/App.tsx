@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { formatMoney } from '@familyshield/core';
-import type { AccountSummary, LoanCase, MockupPerson } from '@familyshield/core';
+import { addMonths, daysBetween, formatDate, formatMoney } from '@familyshield/core';
+import type { AccountSummary, Eligibility, LoanCase, MockupClock, MockupPerson } from '@familyshield/core';
 import type { HostEvent } from '@familyshield/sdk';
 import { BankHome, entrySubtitle } from './BankHome';
 import { CsvPanel } from './CsvPanel';
@@ -30,17 +30,20 @@ interface BankData {
   account: AccountSummary | null;
   myLoan: LoanCase | null;
   incoming: LoanCase[];
+  eligibility: Eligibility | null;
+  /** The mockup's calendar ("Skip ahead"). */
+  clock: MockupClock | null;
   error: string | null;
 }
 
 /** Everything the bank screen shows, re-fetched whenever the data changes. */
 function useBankData(userId: string): BankData & { refresh: () => void } {
-  const [data, setData] = useState<BankData>({ people: [], account: null, myLoan: null, incoming: [], error: null });
+  const [data, setData] = useState<BankData>({ people: [], account: null, myLoan: null, incoming: [], eligibility: null, clock: null, error: null });
 
   const refresh = useCallback(() => {
     const api = host.apiFor(userId);
-    Promise.all([host.people(), host.account(userId), api.getMyLoan(), api.getIncoming()])
-      .then(([people, account, myLoan, incoming]) => setData({ people, account, myLoan, incoming, error: null }))
+    Promise.all([host.people(), host.account(userId), api.getMyLoan(), api.getIncoming(), api.getEligibility(), host.clock()])
+      .then(([people, account, myLoan, incoming, eligibility, clock]) => setData({ people, account, myLoan, incoming, eligibility, clock, error: null }))
       .catch((e: unknown) => setData((d) => ({ ...d, error: e instanceof Error ? e.message : String(e) })));
   }, [userId]);
 
@@ -101,6 +104,8 @@ export function App() {
     setMode(m);
     remember('mockup-embed', m);
   };
+  const today = bank.clock?.today;
+  const skip = (days: number) => void host.skipAhead(days).then(bank.refresh);
 
   return (
     <div className="demo">
@@ -122,6 +127,16 @@ export function App() {
           <span className="seg-label">Embed as</span>
           <button type="button" aria-pressed={mode === 'inline'} onClick={() => switchMode('inline')}>Inline SDK</button>
           <button type="button" aria-pressed={mode === 'webview'} onClick={() => switchMode('webview')}>WebView</button>
+        </div>
+        <div className="seg" role="group" aria-label="Mockup date">
+          <span className="seg-label" title="The date the functional mockup is on. Skip ahead so payments come due; Reset goes back to today.">
+            {today ? formatDate(today) : 'Today'}
+            {bank.clock?.daysAhead ? <span className="ahead"> · +{bank.clock.daysAhead} days</span> : null}
+          </span>
+          <button type="button" onClick={() => skip(7)} disabled={!today} title="Skip ahead one week">+1 week</button>
+          <button type="button" onClick={() => today && skip(daysBetween(today, addMonths(today, 1)))} disabled={!today} title="Skip ahead one month">
+            +1 month
+          </button>
         </div>
         <button type="button" className="data-chip" onClick={() => setCsvOpen(true)} title="Where the data lives">
           <span className={`dot ${host.mode}`} aria-hidden="true" />
@@ -152,7 +167,7 @@ export function App() {
             firstName={me?.firstName ?? ''}
             accountLabel={me?.accountLabel ?? 'Checking'}
             account={bank.account}
-            entry={entrySubtitle(userId, bank.myLoan, bank.incoming)}
+            entry={entrySubtitle(userId, bank.myLoan, bank.incoming, bank.eligibility)}
             onOpenFamilyShield={() => setOpen(true)}
           />
           {open ? (
@@ -183,6 +198,10 @@ export function App() {
             <li>Switch to <strong>Grace (Mom)</strong> above. Her bank app shows Alex’s request; offer privately.</li>
             <li>Back as Alex, accept both offers and sign. Maya signs automatically; switch to Mom to sign hers.</li>
             <li>Watch both balances move. Make payments (or skip to the last one), then claim a partner reward.</li>
+            <li>
+              Or don’t pay: use <strong>+1 month</strong> above. A payment more than a few days late is overdue, and the borrower can’t offer to
+              lend to family until they catch up.
+            </li>
           </ol>
           <p>
             Every number comes from the <strong>CSV files</strong> in <code>data/</code>: people, balances, the fee, limits, points and

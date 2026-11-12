@@ -37,6 +37,7 @@ const STATUS: Record<string, number> = {
   NOT_FOUND: 404,
   INVALID_STATE: 409,
   LIMIT_REACHED: 409,
+  NOT_ELIGIBLE: 403,
 };
 
 export function createApp(service: FamilyShieldService, options: { allowOrigin?: string } = {}) {
@@ -73,6 +74,7 @@ export function createApp(service: FamilyShieldService, options: { allowOrigin?:
   route('GET', '/v1/me', (c) => service.profile(c.user()));
   route('GET', '/v1/me/loan', (c) => service.myLoan(c.user()));
   route('GET', '/v1/me/incoming', (c) => service.incoming(c.user()));
+  route('GET', '/v1/me/eligibility', (c) => service.eligibility(c.user()));
 
   // ---- trusted circle (the caller's own)
   const nickname = (v: unknown) => (v === undefined || v === null ? undefined : str(v, 'nickname'));
@@ -122,6 +124,8 @@ export function createApp(service: FamilyShieldService, options: { allowOrigin?:
   // ---- functional mockup helpers (not part of the production API)
   route('GET', '/v1/mockup/people', () => service.people());
   route('GET', '/v1/mockup/accounts/:userId', (c) => service.account(c.params.userId!));
+  route('GET', '/v1/mockup/clock', () => service.mockupClock());
+  route('POST', '/v1/mockup/clock/skip', (c) => service.skipAhead(numb(c.body.days, 'days')));
   route('POST', '/v1/mockup/reset', () => {
     service.reset();
     return null;

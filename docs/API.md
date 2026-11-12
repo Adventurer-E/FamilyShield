@@ -33,6 +33,7 @@ in `packages/core/src/types.ts`. `Profile` is defined in
 | `NOT_FOUND` | 404 | No such loan, member or reward |
 | `INVALID_STATE` | 409 | The action doesn’t fit the loan’s current status |
 | `LIMIT_REACHED` | 409 | E.g. the pause was already used |
+| `NOT_ELIGIBLE` | 403 | The caller may not do this right now, e.g. offer to lend while their own loan is overdue (see `GET /me/eligibility`) |
 
 `message` is written for end users; the SDK shows it as is.
 
@@ -46,6 +47,7 @@ in `packages/core/src/types.ts`. `Profile` is defined in
 | `GET /me` | `Profile` | The caller, their circle, the people they may see, and their linked account |
 | `GET /me/loan` | `LoanCase \| null` | The caller’s latest loan as borrower (excluding cancelled) |
 | `GET /me/incoming` | `LoanCase[]` | Requests the caller was asked on, **redacted** for a lender, newest first |
+| `GET /me/eligibility` | `Eligibility` | What the caller may do now: `{ today, eligible, blocks: [{ code, message }], overdue, lending }`. See “Who may start a request” below |
 
 ### Trusted circle
 
@@ -77,7 +79,7 @@ Rules:
 
 | Method & path | Body | Core function |
 | --- | --- | --- |
-| `POST /loans` | `{ reason, purpose, amount, months }` | `createLoanCase`; fails if the caller already has an open loan |
+| `POST /loans` | `{ reason, purpose, amount, months }` | `createLoanCase`; fails with `NOT_ELIGIBLE` if the caller may not start a request (below) |
 | `POST /loans/:id/cancel` | — | `cancelRequest` |
 | `POST /loans/:id/offers/:memberId/acceptance` | `{ accepted: boolean }` | `setOfferAccepted` |
 | `POST /loans/:id/sign` | — | `signAsBorrower` |
@@ -85,6 +87,33 @@ Rules:
 | `POST /loans/:id/pause` | — | `requestPause` |
 | `POST /loans/:id/pause/cancel` | — | `cancelPause` |
 | `POST /loans/:id/rewards/:rewardId/claim` | — | `claimReward`: the service gets a code from the partner |
+
+#### Who may start a request
+
+`checkEligibility` in `packages/core/src/eligibility.ts`. Each rule that blocks
+the caller is one entry in `blocks`, most important first; `POST /loans`
+refuses with the first one's message.
+
+| `code` | Blocks when | Setting (`settings.csv`) |
+| --- | --- | --- |
+| `overdue` | A payment on their own loan is overdue (below) | `overdue_grace_days` |
+| `open-loan` | The caller already has a request or loan that isn't repaid or cancelled (one at a time, as before) | — |
+
+`Eligibility` also carries `today` (the bank's date), `overdue` and `lending`.
+
+#### Customers who aren't repaying
+
+`overdueOf` in `packages/core/src/overdue.ts`. An installment is **overdue**
+when it is still unpaid more than `overdue_grace_days` days after its due
+date. `Eligibility.overdue` is then `{ installments, amount, since, daysLate }`
+(what it takes to catch up), and while it lasts:
+
+- the customer can't start a request (`overdue` block, above);
+- they can't **offer** to lend: `Eligibility.lending` is
+  `{ allowed: false, message }` and `POST /loans/:id/responses` with
+  `kind: 'offer'` fails with `NOT_ELIGIBLE`. Declining is always allowed.
+
+Paying clears it: each payment goes to the oldest unpaid installment.
 
 ### Lender actions
 
@@ -102,7 +131,9 @@ These stand in for the bank’s own systems and are **not** part of the producti
 | --- | --- | --- |
 | `GET /mockup/people` | `MockupPerson[]` | Everyone in `people.csv`, for the “Viewing as” menu |
 | `GET /mockup/accounts/:userId` | `AccountSummary` | `{ balance, transactions, exampleTransactions }`: the opening balance plus `transactions.csv`, and the everyday bank activity from `example_transactions.csv` (display only, not counted in the balance) |
-| `POST /mockup/reset` | `204` | Puts every activity table, circles included, back to the shared starting state (setup tables untouched) |
+| `GET /mockup/clock` | `MockupClock` | `{ today, daysAhead }`: the date the mockup is on |
+| `POST /mockup/clock/skip` | `MockupClock` | Body `{ days }` (1–366). Moves the mockup's calendar forward so due dates pass and unpaid payments become overdue. Kept in `mockup_clock.csv` |
+| `POST /mockup/reset` | `204` | Puts every activity table, circles included, back to the shared starting state (setup tables untouched); the calendar goes back to today |
 
 If a CSV can’t be read, every call returns `500` with
 `{ "error": { "code": "DATA_ERROR", "message": "people.csv, line 3, column \"opening_balance\": …" } }`.

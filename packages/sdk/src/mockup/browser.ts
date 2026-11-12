@@ -105,6 +105,7 @@ export function createBrowserMockup(options: { files: CsvFiles; storageKey?: str
         getProfile: () => async(() => service.profile(userId)),
         getMyLoan: () => async(() => service.myLoan(userId)),
         getIncoming: () => async(() => service.incoming(userId)),
+        getEligibility: () => async(() => service.eligibility(userId)),
         createRequest: (input) => async(() => service.createRequest(userId, input)),
         cancelRequest: (id) => async(() => service.cancelRequest(userId, id)),
         setOfferAccepted: (id, memberId, accepted) => async(() => service.setOfferAccepted(userId, id, memberId, accepted)),
@@ -128,6 +129,8 @@ export function createBrowserMockup(options: { files: CsvFiles; storageKey?: str
     },
     people: () => async(() => service.people()),
     account: (userId) => async(() => service.account(userId)),
+    clock: () => async(() => service.mockupClock()),
+    skipAhead: (days) => async(() => service.skipAhead(days)),
     reset: () => async(() => service.reset()),
     subscribe(listener) {
       listeners.add(listener);

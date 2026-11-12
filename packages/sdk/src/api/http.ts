@@ -1,6 +1,6 @@
 import { FamilyShieldError } from '@familyshield/core';
 import type { FamilyShieldErrorCode, LenderResponse, LoanCase, Person } from '@familyshield/core';
-import type { AppConfig, CreateRequestInput, FamilyShieldApi, Profile } from './types';
+import type { AppConfig, CreateRequestInput, Eligibility, FamilyShieldApi, Profile } from './types';
 
 export interface HttpApiOptions {
   /** e.g. "https://api.familyshield.example/v1" */
@@ -78,6 +78,9 @@ export class HttpApi implements FamilyShieldApi {
   }
   getIncoming() {
     return this.call<LoanCase[]>('GET', '/me/incoming');
+  }
+  getEligibility() {
+    return this.call<Eligibility>('GET', '/me/eligibility');
   }
   createRequest(input: CreateRequestInput) {
     return this.call<LoanCase>('POST', '/loans', input);

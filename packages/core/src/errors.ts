@@ -3,7 +3,9 @@ export type FamilyShieldErrorCode =
   | 'INVALID_STATE'
   | 'NOT_FOUND'
   | 'FORBIDDEN'
-  | 'LIMIT_REACHED';
+  | 'LIMIT_REACHED'
+  /** The person may not do this right now, e.g. start a request (see eligibility.ts). */
+  | 'NOT_ELIGIBLE';
 
 /** Thrown for any rule violation. `message` is safe to show to the user. */
 export class FamilyShieldError extends Error {

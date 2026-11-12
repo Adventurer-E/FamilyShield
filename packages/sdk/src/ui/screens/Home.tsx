@@ -2,7 +2,7 @@ import { formatDate, formatMoney, lenderSummary, nextInstallment, repaymentSumma
 import type { LoanCase } from '@familyshield/core';
 import { lenderNeedsAction, useFs } from '../context';
 import type { Role, Route } from '../context';
-import { Avatar, Button, Progress, Screen } from '../kit';
+import { Avatar, Button, NotEligible, Progress, Screen } from '../kit';
 import { ChevronIcon, DocIcon, LockIcon, StarIcon } from '../icons';
 
 /** Where the borrower's own loan should open, given its state. */
@@ -18,7 +18,8 @@ export function borrowerRoute(loan: LoanCase): Route {
 }
 
 function MyLoanCard({ loan }: { loan: LoanCase }) {
-  const { go } = useFs();
+  const { go, data } = useFs();
+  const overdue = loan.status === 'active' ? data.eligibility.overdue : null;
   const pending = loan.offers.filter((o) => o.status === 'pending').length;
   const offered = loan.offers.filter((o) => o.status === 'offered').length;
 
@@ -49,6 +50,11 @@ function MyLoanCard({ loan }: { loan: LoanCase }) {
           ? 'Every payment made. Your family rewards are open.'
           : `${s.paymentsMade} of ${s.paymentsTotal} payments made · next ${next ? formatDate(next.dueDate) : ''}`}
       </span>
+      {overdue ? (
+        <span className="fs-pill warn" style={{ alignSelf: 'flex-start' }}>
+          Payment late · {formatMoney(overdue.amount)} to catch up
+        </span>
+      ) : null}
       <Progress value={s.progress} label="Repaid so far" />
     </button>
   );
@@ -155,7 +161,11 @@ export function BorrowerHome() {
           <p className="fs-small" style={{ margin: 0, color: '#3B4659' }}>
             Ask privately, receive private offers and keep clear, signed terms, without leaving your bank.
           </p>
-          <Button onClick={() => go({ name: 'request' })}>{myLoan ? 'Start a new request' : 'Start a request'}</Button>
+          {data.eligibility.eligible ? (
+            <Button onClick={() => go({ name: 'request' })}>{myLoan ? 'Start a new request' : 'Start a request'}</Button>
+          ) : (
+            <NotEligible hideOpenLoan />
+          )}
         </section>
       ) : null}
 

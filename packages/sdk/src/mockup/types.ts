@@ -1,4 +1,4 @@
-import type { AccountSummary, MockupPerson } from '@familyshield/core';
+import type { AccountSummary, MockupClock, MockupPerson } from '@familyshield/core';
 import type { CsvFiles } from '@familyshield/service';
 import type { FamilyShieldApi } from '../api/types';
 
@@ -14,6 +14,10 @@ export interface MockupHost {
   apiFor(userId: string): FamilyShieldApi;
   people(): Promise<MockupPerson[]>;
   account(userId: string): Promise<AccountSummary>;
+  /** The date the mockup is on ("Skip ahead" moves it forward). */
+  clock(): Promise<MockupClock>;
+  /** Move the mockup's calendar forward, so due dates pass. Reset goes back to today. */
+  skipAhead(days: number): Promise<MockupClock>;
   /** Clear all activity (requests, loans, payments). Setup data stays. */
   reset(): Promise<void>;
   /** Called whenever data may have changed. Returns an unsubscribe function. */
