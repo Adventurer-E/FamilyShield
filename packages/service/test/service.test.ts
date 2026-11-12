@@ -418,3 +418,75 @@ describe('adding to a circle by email or phone', () => {
     expect(readDatabase(storage.files).people.map((p) => p.id)).toEqual(['alex', 'mom', 'maya', 'lisa']);
   });
 });
+
+describe('who may start a request', () => {
+  it('reads the overdue setting', () => {
+    expect(setup().svc.config().rules.overdueGraceDays).toBe(3);
+  });
+
+  it('allows one open request at a time, and says so up front', () => {
+    const { svc } = setup();
+    expect(svc.eligibility('alex')).toMatchObject({ today: '2026-11-05', eligible: true, blocks: [], lending: { allowed: true } });
+    svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 100_000, months: 6 });
+    expect(svc.eligibility('alex').blocks.map((b) => b.code)).toEqual(['open-loan']);
+    expect(() => svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 100_000, months: 6 })).toThrow(/already have an open request/);
+  });
+
+  it('rejects an impossible grace period', () => {
+    expect(() => setup({ 'settings.csv': 'key,value\noverdue_grace_days,-1\n' }).svc.config()).toThrow(/overdue_grace_days can’t be negative/);
+  });
+});
+
+describe('customers who aren’t repaying, and the mockup clock', () => {
+  /** Alex borrows $500 from Maya (auto-offer, auto-sign) on Nov 5, 2026: payments due Dec 5, Jan 5, … */
+  function funded() {
+    const t = setup();
+    const loan = t.svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 100_000, months: 6 });
+    t.advance(5_000);
+    t.svc.setOfferAccepted('alex', loan.id, 'maya', true);
+    t.svc.signAsBorrower('alex', loan.id);
+    t.advance(2_000);
+    expect(t.svc.myLoan('alex')!.status).toBe('active');
+    return { ...t, loan };
+  }
+
+  it('skips ahead, keeps the date in mockup_clock.csv, and goes back to today on reset', () => {
+    const { svc, storage } = setup();
+    expect(svc.mockupClock()).toEqual({ today: '2026-11-05', daysAhead: 0 });
+    expect(svc.skipAhead(31)).toEqual({ today: '2026-12-06', daysAhead: 31 });
+    expect(storage.files['mockup_clock.csv']).toBe('days_ahead\n31\n');
+    expect(svc.mockupClock().today).toBe('2026-12-06');
+    expect(() => svc.skipAhead(0)).toThrow(/between 1 and 366/);
+    svc.reset();
+    expect(svc.mockupClock()).toEqual({ today: '2026-11-05', daysAhead: 0 });
+  });
+
+  it('a skipped month makes the unpaid payment overdue, and paying clears it', () => {
+    const { svc, loan } = funded();
+    svc.skipAhead(35); // Dec 10: payment 1 (due Dec 5) is 5 days late
+    const e = svc.eligibility('alex');
+    expect(e.overdue).toMatchObject({ installments: [1], daysLate: 5 });
+    expect(e.blocks[0]!.code).toBe('overdue');
+    svc.makePayment('alex', loan.id);
+    expect(svc.eligibility('alex').overdue).toBeNull();
+    // Paid late: recorded as not on time, no on-time points for it
+    expect(svc.myLoan('alex')!.schedule[0]!.onTime).toBe(false);
+  });
+
+  it('someone behind on their loan can decline but not offer to lend', () => {
+    const { svc } = funded();
+    svc.skipAhead(35);
+    // Mom asks her circle (Alex and Lisa)
+    const mine = svc.createRequest('mom', { reason: 'medical', purpose: 'Bill', amount: 50_000, months: 6 });
+    expect(svc.eligibility('alex').lending.allowed).toBe(false);
+    expect(() => svc.respond('alex', mine.id, { kind: 'offer', amount: 10_000 })).toThrow(/Catch up on your own family loan first/);
+    expect(svc.respond('alex', mine.id, { kind: 'decline' }).offers[0]!.status).toBe('declined');
+  });
+
+  it('time stamps follow the mockup clock', () => {
+    const { svc, loan } = funded();
+    svc.skipAhead(40);
+    svc.makePayment('alex', loan.id);
+    expect(svc.myLoan('alex')!.schedule[0]!.paidAt!.slice(0, 10)).toBe('2026-12-15');
+  });
+});

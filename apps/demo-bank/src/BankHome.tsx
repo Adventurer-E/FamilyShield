@@ -1,8 +1,14 @@
 import { formatDate, formatMoney, isOpen, nextInstallment } from '@familyshield/core';
-import type { AccountSummary, LoanCase } from '@familyshield/core';
+import type { AccountSummary, Eligibility, LoanCase } from '@familyshield/core';
 
 /** What the FamilyShield entry card says, from the FamilyShield API. */
-export function entrySubtitle(userId: string, myLoan: LoanCase | null, incoming: LoanCase[]): { text: string; badge?: string } {
+export function entrySubtitle(
+  userId: string,
+  myLoan: LoanCase | null,
+  incoming: LoanCase[],
+  eligibility: Eligibility | null,
+): { text: string; badge?: string } {
+  if (eligibility?.overdue) return { text: `Family payment late · ${formatMoney(eligibility.overdue.amount)} to catch up`, badge: 'LATE' };
   const needsMe = incoming.filter((l) => {
     const offer = l.offers.find((o) => o.memberId === userId);
     const agreement = l.agreements.find((a) => a.lenderId === userId);

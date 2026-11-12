@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DEFAULT_REASONS, formatDate, formatMoney, lenderSummary } from '@familyshield/core';
+import { DEFAULT_REASONS, formatDate, formatMoney, lenderSummary, overdueOf } from '@familyshield/core';
 import type { LoanCase } from '@familyshield/core';
 import { useFs } from '../context';
 import { Avatar, Button, Notice, Progress, Screen } from '../kit';
@@ -54,7 +54,14 @@ export function Respond({ loan }: { loan: LoanCase }) {
         <Notice kind="info">This request has closed.</Notice>
       ) : null}
 
-      {loan.status === 'collecting' && mine?.status === 'pending' ? (
+      {loan.status === 'collecting' && mine?.status === 'pending' && !data.eligibility.lending.allowed ? (
+        <>
+          <Notice kind="info">{data.eligibility.lending.message}</Notice>
+          <Button variant="secondary" onClick={() => run(() => api.respond(loan.id, { kind: 'decline', note }))}>Not this time</Button>
+        </>
+      ) : null}
+
+      {loan.status === 'collecting' && mine?.status === 'pending' && data.eligibility.lending.allowed ? (
         <>
           <fieldset className="fs-stack" style={{ border: 'none', padding: 0, margin: 0 }}>
             <legend className="fs-h3" style={{ marginBottom: 10 }}>How much can you offer?</legend>
@@ -114,6 +121,8 @@ export function LenderLoan({ loan }: { loan: LoanCase }) {
   const who = nameOf(loan.borrowerId);
   if (!ls.agreement) return <Respond loan={loan} />;
   const nextMine = loan.schedule.find((i) => !i.paidAt);
+  // A payment to me that hasn't arrived (C2). The amounts here are my share only.
+  const late = overdueOf(loan, data.eligibility.today, data.config.rules);
 
   return (
     <Screen title={`Your loan to ${who}`}>
@@ -147,6 +156,13 @@ export function LenderLoan({ loan }: { loan: LoanCase }) {
                   : ''}
             </div>
           </section>
+
+          {late ? (
+            <Notice kind="info">
+              {who}’s payment {late.installments.join(', ')} was due {formatDate(late.since)} and hasn’t arrived yet ({formatMoney(late.amount)} to
+              you). FamilyShield reminds them automatically; you don’t need to chase it.
+            </Notice>
+          ) : null}
 
           {loan.pause?.status === 'pending' && loan.pause.approvals[me] === null ? (
             <section className="fs-card outline">

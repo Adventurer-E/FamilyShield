@@ -31,6 +31,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   padding: 6px 12px; min-height: 34px; font-weight: 700; font-size: 13px;
 }
 .seg button[aria-pressed='true'] { background: #fff; color: var(--ink); border-color: #fff; }
+.seg button:disabled { opacity: 0.5; cursor: default; }
+.seg-label .ahead { color: #f2c14e; font-weight: 700; }
 .reset { border-color: #f2c14e; color: #f2c14e; }
 
 .stage { flex: 1; display: flex; gap: 40px; justify-content: center; align-items: flex-start; padding: 32px 16px; flex-wrap: wrap; }

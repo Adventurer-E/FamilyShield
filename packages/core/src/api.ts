@@ -39,6 +39,14 @@ export interface AccountSummary {
   exampleTransactions: Array<{ id: string; date: string; name: string; category: string; amount: Cents }>;
 }
 
+/** Functional-mockup only: the mockup's calendar ("Skip ahead" in the top bar). */
+export interface MockupClock {
+  /** The date the mockup is on. */
+  today: string;
+  /** How many days that is ahead of the real date. */
+  daysAhead: number;
+}
+
 /** Functional-mockup only: someone you can switch to in the top bar. */
 export interface MockupPerson {
   id: string;

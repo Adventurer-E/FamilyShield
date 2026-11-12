@@ -71,6 +71,7 @@ Extra columns are ignored.
 | `default_term_months` | Term the request screen starts at (must be one of `terms_months`) | `10` |
 | `lender_offer_amounts` | Quick-pick amounts a lender sees when offering, in dollars, separated by `\|`. Only amounts up to the request are shown; a "The full $X" choice appears when the request is larger than all of them | `250\|500\|1000` |
 | `max_pauses` | One-month pauses allowed per loan | `1` |
+| `overdue_grace_days` | Days after a due date before an unpaid payment counts as **overdue**. Until they catch up, the borrower can't offer to lend | `3` |
 | `points_per_helper` | Points per relative who funds the loan | `100` |
 | `points_per_on_time_payment` | Points per on-time payment | `80` |
 | `points_on_full_repayment` | Bonus at full repayment | `200` |
@@ -150,6 +151,7 @@ Setup tables are untouched.
 | `pause_answers.csv` | lender's pause answer | `loan_id`, `lender_id`, `answer` (yes, no, or blank = not answered) |
 | `claimed_rewards.csv` | claimed offer | `loan_id`, `reward_id`, `code` |
 | `transactions.csv` | bank posting | `id`, `user_id`, `at`, `amount` (+ in, − out), `memo` |
+| `mockup_clock.csv` | the mockup's calendar | `days_ahead`: how many days the functional mockup runs ahead of the real date (**Skip ahead** in the top bar), so due dates pass and payments become overdue. Empty in the shared starting state, i.e. today |
 
 Tip: to build a scenario, e.g. a loan that's one payment from done, play it in
 the app until it's close, adjust `paid_at` dates or `points` in `data/local/`

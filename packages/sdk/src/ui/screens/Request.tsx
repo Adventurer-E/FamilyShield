@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { estimateMonthly, feeFor, feeLabel, formatMoney } from '@familyshield/core';
 import type { Reason } from '@familyshield/core';
 import { useFs } from '../context';
-import { Button, Notice, Screen } from '../kit';
+import { Button, NotEligible, Notice, Screen } from '../kit';
 
 export function Request() {
   const { api, run, go, emit, data } = useFs();
@@ -32,6 +32,15 @@ export function Request() {
       go({ name: 'offers' }, { replace: true });
     }
   };
+
+  // Someone who can't ask right now sees why instead of the form (the backend refuses anyway).
+  if (!data.eligibility.eligible) {
+    return (
+      <Screen title="Ask for support" step={1}>
+        <NotEligible />
+      </Screen>
+    );
+  }
 
   return (
     <Screen title="Ask for support" step={1}>

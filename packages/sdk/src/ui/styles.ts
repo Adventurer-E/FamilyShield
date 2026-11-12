@@ -32,6 +32,8 @@ export const styles = `
 .fs-card.brand { background: var(--fs-brand); color: var(--fs-on-brand); }
 .fs-card.soft { background: var(--fs-brand-soft); }
 .fs-card.night { background: var(--fs-night); color: #fff; }
+.fs-card.late { background: #FFF6E5; border: 1px solid #F0C36B; color: #5C3B00; }
+.fs-card.late .fs-h3 { color: #5C3B00; }
 .fs-card.flush { padding: 0; gap: 0; overflow: hidden; }
 .fs-card h2, .fs-card h3 { margin: 0; }
 .fs-h2 { font-size: 24px; font-weight: 800; line-height: 1.2; }

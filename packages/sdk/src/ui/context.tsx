@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { FamilyShieldError } from '@familyshield/core';
-import type { LoanCase, PersonId } from '@familyshield/core';
+import type { Eligibility, LoanCase, PersonId } from '@familyshield/core';
 import type { AppConfig, FamilyShieldApi, Profile } from '../api/types';
 import type { HostEvent } from '../bridge';
 
@@ -29,6 +29,8 @@ export interface FsData {
   profile: Profile;
   myLoan: LoanCase | null;
   incoming: LoanCase[];
+  /** Whether I may start a request now (C1: eligibility rules). */
+  eligibility: Eligibility;
 }
 
 interface FsContext {
@@ -97,8 +99,14 @@ export function useFs(): FsContext {
 }
 
 async function fetchAll(api: FamilyShieldApi): Promise<FsData> {
-  const [config, profile, myLoan, incoming] = await Promise.all([api.getConfig(), api.getProfile(), api.getMyLoan(), api.getIncoming()]);
-  return { config, profile, myLoan, incoming };
+  const [config, profile, myLoan, incoming, eligibility] = await Promise.all([
+    api.getConfig(),
+    api.getProfile(),
+    api.getMyLoan(),
+    api.getIncoming(),
+    api.getEligibility(),
+  ]);
+  return { config, profile, myLoan, incoming, eligibility };
 }
 
 export function FamilyShieldProvider(props: {

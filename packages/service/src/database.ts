@@ -96,6 +96,11 @@ export interface Database {
   autoReplies: AutoReplyRow[];
   loans: LoanCase[];
   transactions: Transaction[];
+  /**
+   * Functional mockup only: how many days the mockup's calendar runs ahead of
+   * the real date ("Skip ahead" in the toolbar), so late payments can be shown.
+   */
+  clockDaysAhead: number;
 }
 
 // ---------------------------------------------------------------- schema
@@ -124,6 +129,8 @@ export const ACTIVITY_TABLES = {
   'pause_answers.csv': ['loan_id', 'lender_id', 'answer'],
   'claimed_rewards.csv': ['loan_id', 'reward_id', 'code'],
   'transactions.csv': ['id', 'user_id', 'at', 'amount', 'memo'],
+  // Functional mockup only: days the mockup's calendar runs ahead of today. Blank or no row = 0.
+  'mockup_clock.csv': ['days_ahead'],
 } as const;
 
 export type ActivityFile = keyof typeof ACTIVITY_TABLES;
@@ -248,6 +255,9 @@ function readRules(files: CsvFiles): Rules {
       case 'max_pauses':
         rules.maxPauses = int(r, 'value');
         break;
+      case 'overdue_grace_days':
+        rules.overdueGraceDays = int(r, 'value');
+        break;
       case 'points_per_helper':
         rules.points.help = int(r, 'value');
         break;
@@ -270,6 +280,7 @@ function readRules(files: CsvFiles): Rules {
     throw new CsvDataError('settings.csv: default_request must be between min_request and max_request.');
   if (!rules.terms.includes(rules.defaultTerm))
     throw new CsvDataError('settings.csv: default_term_months must be one of terms_months.');
+  if (rules.overdueGraceDays < 0) throw new CsvDataError('settings.csv: overdue_grace_days can’t be negative.');
   return rules;
 }
 
@@ -506,6 +517,14 @@ function readLoans(files: CsvFiles): LoanCase[] {
   });
 }
 
+function readClock(files: CsvFiles): number {
+  const row = readTable('mockup_clock.csv', files['mockup_clock.csv']).at(-1);
+  if (!row || !row.get('days_ahead')) return 0;
+  const days = int(row, 'days_ahead');
+  if (days < 0) fail(row, 'days_ahead', 'can’t be negative');
+  return days;
+}
+
 function readTransactions(files: CsvFiles): Transaction[] {
   return readTable('transactions.csv', files['transactions.csv']).map((r) => ({
     id: req(r, 'id'),
@@ -530,6 +549,7 @@ export function readDatabase(files: CsvFiles): Database {
     autoReplies: readAutoReplies(files),
     loans: readLoans(files),
     transactions: readTransactions(files),
+    clockDaysAhead: readClock(files),
   };
 }
 
@@ -620,6 +640,7 @@ export function writeActivity(db: Database): Record<ActivityFile, string> {
   for (const t of db.transactions) {
     rows['transactions.csv'].push({ id: t.id, user_id: t.userId, at: t.at, amount: fmtMoney(t.amount), memo: t.memo });
   }
+  if (db.clockDaysAhead) rows['mockup_clock.csv'].push({ days_ahead: String(db.clockDaysAhead) });
 
   return Object.fromEntries(ACTIVITY_FILES.map((f) => [f, writeTable([...ACTIVITY_TABLES[f]], rows[f])])) as Record<ActivityFile, string>;
 }

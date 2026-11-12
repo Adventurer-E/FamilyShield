@@ -27,6 +27,7 @@ const ACTIVITY = [
   'pause_answers.csv',
   'claimed_rewards.csv',
   'transactions.csv',
+  'mockup_clock.csv',
 ];
 
 const dataDir = resolve(process.env.DATA_DIR ?? fileURLToPath(new URL('../data', import.meta.url)));

@@ -23,6 +23,18 @@ export function addMonths(date: IsoDate, months: number): IsoDate {
   return toIsoDate(target);
 }
 
+/** Add (or, with a negative number, subtract) calendar days. */
+export function addDays(date: IsoDate, days: number): IsoDate {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return toIsoDate(d);
+}
+
+/** Whole days from `from` to `to` (negative when `to` is earlier). */
+export function daysBetween(from: IsoDate, to: IsoDate): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}
+
 export function formatDate(date: IsoDate, withYear = true): string {
   return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', {
     month: 'short',
