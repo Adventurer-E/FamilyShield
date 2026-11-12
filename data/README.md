@@ -71,6 +71,8 @@ Extra columns are ignored.
 | `default_term_months` | Term the request screen starts at (must be one of `terms_months`) | `10` |
 | `lender_offer_amounts` | Quick-pick amounts a lender sees when offering, in dollars, separated by `\|`. Only amounts up to the request are shown; a "The full $X" choice appears when the request is larger than all of them | `250\|500\|1000` |
 | `max_pauses` | One-month pauses allowed per loan | `1` |
+| `min_circle_size` | People a borrower needs in their trusted circle before they can ask for support (at least 1) | `2` |
+| `wait_days_after_repaid` | Days a borrower waits after fully repaying a loan before asking again; `0` = no wait | `30` |
 | `points_per_helper` | Points per relative who funds the loan | `100` |
 | `points_per_on_time_payment` | Points per on-time payment | `80` |
 | `points_on_full_repayment` | Bonus at full repayment | `200` |

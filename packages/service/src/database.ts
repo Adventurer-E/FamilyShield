@@ -248,6 +248,12 @@ function readRules(files: CsvFiles): Rules {
       case 'max_pauses':
         rules.maxPauses = int(r, 'value');
         break;
+      case 'min_circle_size':
+        rules.eligibility.minCircleSize = int(r, 'value');
+        break;
+      case 'wait_days_after_repaid':
+        rules.eligibility.waitDaysAfterRepaid = int(r, 'value');
+        break;
       case 'points_per_helper':
         rules.points.help = int(r, 'value');
         break;
@@ -270,6 +276,8 @@ function readRules(files: CsvFiles): Rules {
     throw new CsvDataError('settings.csv: default_request must be between min_request and max_request.');
   if (!rules.terms.includes(rules.defaultTerm))
     throw new CsvDataError('settings.csv: default_term_months must be one of terms_months.');
+  if (rules.eligibility.minCircleSize < 1) throw new CsvDataError('settings.csv: min_circle_size must be at least 1.');
+  if (rules.eligibility.waitDaysAfterRepaid < 0) throw new CsvDataError('settings.csv: wait_days_after_repaid can’t be negative.');
   return rules;
 }
 

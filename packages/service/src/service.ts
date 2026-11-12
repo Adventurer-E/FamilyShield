@@ -1,13 +1,15 @@
 import {
   FamilyShieldError,
+  assertEligible,
   cancelPause,
+  checkEligibility,
   cancelRequest,
   claimReward,
   createLoanCase,
   getReward,
-  isOpen,
   recordPayment,
   requestPause,
+  toIsoDate,
   respondToPause,
   respondToRequest,
   setOfferAccepted,
@@ -19,6 +21,7 @@ import type {
   AccountSummary,
   AppConfig,
   CreateRequestInput,
+  Eligibility,
   LenderResponse,
   LoanCase,
   MockupPerson,
@@ -293,14 +296,30 @@ export class FamilyShieldService {
       .reverse();
   }
 
+  private eligibilityOf(db: Database, userId: string): Eligibility {
+    return checkEligibility(
+      {
+        today: toIsoDate(this.now()),
+        circleSize: db.circles.filter((c) => c.ownerId === userId).length,
+        loans: db.loans.filter((l) => l.borrowerId === userId),
+      },
+      db.rules,
+    );
+  }
+
+  /** Whether the caller may start a request now, and if not, why (settings.csv: eligibility rules). */
+  eligibility(userId: string): Eligibility {
+    const db = this.open();
+    this.user(db, userId);
+    return this.eligibilityOf(db, userId);
+  }
+
   // ------------------------------------------------------------ borrower
 
   createRequest(userId: string, input: CreateRequestInput): LoanCase {
     const db = this.open();
     this.user(db, userId);
-    if (db.loans.some((l) => l.borrowerId === userId && isOpen(l))) {
-      throw new FamilyShieldError('INVALID_STATE', 'You already have an open request or loan.');
-    }
+    assertEligible(this.eligibilityOf(db, userId));
     const loan = createLoanCase(
       {
         id: this.id('loan'),

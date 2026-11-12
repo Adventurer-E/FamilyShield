@@ -2,7 +2,7 @@ import { formatDate, formatMoney, lenderSummary, nextInstallment, repaymentSumma
 import type { LoanCase } from '@familyshield/core';
 import { lenderNeedsAction, useFs } from '../context';
 import type { Role, Route } from '../context';
-import { Avatar, Button, Progress, Screen } from '../kit';
+import { Avatar, Button, NotEligible, Progress, Screen } from '../kit';
 import { ChevronIcon, DocIcon, LockIcon, StarIcon } from '../icons';
 
 /** Where the borrower's own loan should open, given its state. */
@@ -155,7 +155,11 @@ export function BorrowerHome() {
           <p className="fs-small" style={{ margin: 0, color: '#3B4659' }}>
             Ask privately, receive private offers and keep clear, signed terms, without leaving your bank.
           </p>
-          <Button onClick={() => go({ name: 'request' })}>{myLoan ? 'Start a new request' : 'Start a request'}</Button>
+          {data.eligibility.eligible ? (
+            <Button onClick={() => go({ name: 'request' })}>{myLoan ? 'Start a new request' : 'Start a request'}</Button>
+          ) : (
+            <NotEligible hideOpenLoan />
+          )}
         </section>
       ) : null}
 

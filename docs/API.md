@@ -33,6 +33,7 @@ in `packages/core/src/types.ts`. `Profile` is defined in
 | `NOT_FOUND` | 404 | No such loan, member or reward |
 | `INVALID_STATE` | 409 | The action doesn’t fit the loan’s current status |
 | `LIMIT_REACHED` | 409 | E.g. the pause was already used |
+| `NOT_ELIGIBLE` | 403 | The caller may not do this right now, e.g. start a request while their circle is too small (see `GET /me/eligibility`) |
 
 `message` is written for end users; the SDK shows it as is.
 
@@ -46,6 +47,7 @@ in `packages/core/src/types.ts`. `Profile` is defined in
 | `GET /me` | `Profile` | The caller, their circle, the people they may see, and their linked account |
 | `GET /me/loan` | `LoanCase \| null` | The caller’s latest loan as borrower (excluding cancelled) |
 | `GET /me/incoming` | `LoanCase[]` | Requests the caller was asked on, **redacted** for a lender, newest first |
+| `GET /me/eligibility` | `Eligibility` | Whether the caller may start a request now: `{ eligible, blocks: [{ code, message, until? }] }`. See “Who may start a request” below |
 
 ### Trusted circle
 
@@ -77,7 +79,7 @@ Rules:
 
 | Method & path | Body | Core function |
 | --- | --- | --- |
-| `POST /loans` | `{ reason, purpose, amount, months }` | `createLoanCase`; fails if the caller already has an open loan |
+| `POST /loans` | `{ reason, purpose, amount, months }` | `createLoanCase`; fails with `NOT_ELIGIBLE` if the caller may not start a request (below) |
 | `POST /loans/:id/cancel` | — | `cancelRequest` |
 | `POST /loans/:id/offers/:memberId/acceptance` | `{ accepted: boolean }` | `setOfferAccepted` |
 | `POST /loans/:id/sign` | — | `signAsBorrower` |
@@ -85,6 +87,18 @@ Rules:
 | `POST /loans/:id/pause` | — | `requestPause` |
 | `POST /loans/:id/pause/cancel` | — | `cancelPause` |
 | `POST /loans/:id/rewards/:rewardId/claim` | — | `claimReward`: the service gets a code from the partner |
+
+#### Who may start a request
+
+`checkEligibility` in `packages/core/src/eligibility.ts`. Each rule that blocks
+the caller is one entry in `blocks`, most important first; `POST /loans`
+refuses with the first one's message.
+
+| `code` | Blocks when | Setting (`settings.csv`) |
+| --- | --- | --- |
+| `open-loan` | The caller already has a request or loan that isn't repaid or cancelled | — |
+| `small-circle` | Their trusted circle has fewer people than the minimum | `min_circle_size` |
+| `waiting-period` | They fully repaid a loan fewer than N days ago. `until` is the first day they can ask again | `wait_days_after_repaid` |
 
 ### Lender actions
 

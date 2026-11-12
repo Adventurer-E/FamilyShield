@@ -418,3 +418,49 @@ describe('adding to a circle by email or phone', () => {
     expect(readDatabase(storage.files).people.map((p) => p.id)).toEqual(['alex', 'mom', 'maya', 'lisa']);
   });
 });
+
+describe('who may start a request (settings.csv)', () => {
+  it('reads the eligibility settings', () => {
+    const { svc } = setup();
+    expect(svc.config().rules.eligibility).toEqual({ minCircleSize: 2, waitDaysAfterRepaid: 30 });
+  });
+
+  it('explains why before the form, and refuses with the same words', () => {
+    const { svc } = setup();
+    expect(svc.eligibility('alex')).toEqual({ eligible: true, blocks: [] });
+    svc.removeCircleMember('alex', 'maya');
+    svc.removeCircleMember('alex', 'lisa');
+    const blocked = svc.eligibility('alex');
+    expect(blocked.eligible).toBe(false);
+    expect(blocked.blocks[0]!.code).toBe('small-circle');
+    expect(() => svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 100_000, months: 6 })).toThrow(blocked.blocks[0]!.message);
+  });
+
+  it('allows one open request at a time', () => {
+    const { svc } = setup();
+    svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 100_000, months: 6 });
+    expect(svc.eligibility('alex').blocks.map((b) => b.code)).toEqual(['open-loan']);
+    expect(() => svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 100_000, months: 6 })).toThrow(/already have an open request/);
+  });
+
+  it('waits the configured days after a loan is repaid', () => {
+    const { svc, advance } = setup();
+    const loan = svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 100_000, months: 6 });
+    advance(5_000);
+    svc.setOfferAccepted('alex', loan.id, 'maya', true);
+    svc.signAsBorrower('alex', loan.id);
+    advance(2_000);
+    for (let i = 0; i < 6; i++) svc.makePayment('alex', loan.id);
+    const wait = svc.eligibility('alex').blocks[0]!;
+    expect(wait).toMatchObject({ code: 'waiting-period', until: '2026-12-05' });
+    expect(() => svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 100_000, months: 6 })).toThrow(/from Dec 5, 2026/);
+    advance(30 * 86_400_000);
+    expect(svc.eligibility('alex').eligible).toBe(true);
+  });
+
+  it('rejects impossible settings', () => {
+    const bad = (line: string) => setup({ 'settings.csv': `key,value\n${line}\n` }).svc;
+    expect(() => bad('min_circle_size,0').config()).toThrow(/min_circle_size must be at least 1/);
+    expect(() => bad('wait_days_after_repaid,-1').config()).toThrow(/can’t be negative/);
+  });
+});

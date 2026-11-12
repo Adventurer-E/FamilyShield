@@ -21,6 +21,13 @@ export interface Rules {
   offerAmounts: Cents[];
   /** How many one-month pauses a borrower may ask for over a loan's life. */
   maxPauses: number;
+  /** Who may start a request (see eligibility.ts). */
+  eligibility: {
+    /** People needed in the trusted circle before asking. At least 1. */
+    minCircleSize: number;
+    /** Days to wait after a loan is fully repaid before asking again. 0 = no wait. */
+    waitDaysAfterRepaid: number;
+  };
   /** Family points. Points belong to the whole circle on a loan, not one person. */
   points: {
     /** Per family member who funds the loan, awarded when the loan goes live. */
@@ -42,6 +49,7 @@ export const DEFAULT_RULES: Rules = {
   defaultTerm: 10,
   offerAmounts: [25_000, 50_000, 100_000], // $250, $500, $1,000
   maxPauses: 1,
+  eligibility: { minCircleSize: 1, waitDaysAfterRepaid: 0 },
   points: { help: 100, onTime: 80, complete: 200 },
 };
 

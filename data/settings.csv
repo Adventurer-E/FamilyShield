@@ -11,3 +11,5 @@ max_pauses,1,How many one-month pauses a borrower can ask for per loan
 points_per_helper,100,Family points for each relative who funds the loan
 points_per_on_time_payment,80,Family points for each payment made on or before its due date
 points_on_full_repayment,200,Bonus family points when the loan is fully repaid
+min_circle_size,2,People a borrower needs in their trusted circle before they can ask for support
+wait_days_after_repaid,30,Days a borrower waits after fully repaying a loan before they can ask again (0 = no wait)

@@ -88,6 +88,33 @@ export function Notice({ children, kind = 'privacy' }: { children: ReactNode; ki
   );
 }
 
+/**
+ * Why the user can't start a request right now (C1), one notice per reason,
+ * with a shortcut to the circle when it's too small. Renders nothing when eligible.
+ */
+export function NotEligible({ hideOpenLoan }: { hideOpenLoan?: boolean }) {
+  const { data, go } = useFs();
+  const blocks = data.eligibility.blocks.filter((b) => !(hideOpenLoan && b.code === 'open-loan'));
+  if (blocks.length === 0) return null;
+  return (
+    <div className="fs-stack" style={{ gap: 8 }} role="status">
+      {blocks.map((b) => (
+        <Notice key={b.code} kind="info">
+          {b.message}
+          {b.code === 'small-circle' ? (
+            <>
+              {' '}
+              <button type="button" className="fs-btn ghost small" style={{ padding: 0, display: 'inline', minHeight: 0, width: 'auto', textDecoration: 'underline' }} onClick={() => go({ name: 'circle' })}>
+                Add people to your circle
+              </button>
+            </>
+          ) : null}
+        </Notice>
+      ))}
+    </div>
+  );
+}
+
 /** Shown only when the module runs in demo mode. */
 export function DemoHint({ children }: { children: ReactNode }) {
   const { demo } = useFs();
