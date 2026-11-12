@@ -4,7 +4,7 @@ import type { FamilyShieldApi } from '../api/types';
 import type { MockupHost } from './types';
 
 /**
- * Functional mockup with no server, e.g. on GitHub Pages. It runs the same
+ * The mockup with no server, e.g. on GitHub Pages. It runs the same
  * backend logic (FamilyShieldService) in the browser:
  *
  *  - setup tables (people, settings, reasons, rewards, auto replies) come

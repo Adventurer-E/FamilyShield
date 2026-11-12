@@ -6,7 +6,7 @@ import { createApp } from './app';
 import { LayeredCsvStorage } from './storage';
 
 /**
- * FamilyShield functional-mockup backend.
+ * FamilyShield mockup backend.
  *
  *   PORT          default 8787
  *   DATA_DIR      shared, committed CSVs (default <repo>/data)
@@ -34,7 +34,7 @@ try {
 if (storage.isSeedNewer()) {
   console.warn(
     '  ⚠ The shared starting state in data/ changed since your working copy was made.\n' +
-      '    Run `npm run data:reset` (or press "Reset functional mockup") to start from it.',
+      '    Run `npm run data:reset` (or press "Reset") to start from it.',
   );
 }
 for (const f of storage.unknownFiles()) console.warn(`  ⚠ Ignoring unknown file in working copy: ${f}`);

@@ -82,7 +82,6 @@ export const styles = `
 
 .fs-notice { display: flex; gap: 10px; background: #EEF1F6; border-radius: 14px; padding: 12px 14px; font-size: 13px; color: #3B4659; line-height: 1.5; }
 .fs-notice svg { flex-shrink: 0; margin-top: 1px; }
-.fs-notice.demo { background: #FFF6DB; color: #5C4300; }
 .fs-error { background: #FDECEC; color: #8A1C1C; border-radius: 14px; padding: 12px 14px; font-size: 14px; font-weight: 600; display: flex; gap: 10px; align-items: flex-start; }
 .fs-error button { margin-left: auto; border: none; background: transparent; font-weight: 800; color: inherit; cursor: pointer; }
 

@@ -1,7 +1,7 @@
 import type { Cents } from './money';
 
 /**
- * The business rules. In the functional mockup they come from
+ * The business rules. In the mockup they come from
  * data/settings.csv, so they can be tuned without touching code; these
  * defaults match the FamilyShield deck and are used when nothing else is given.
  */

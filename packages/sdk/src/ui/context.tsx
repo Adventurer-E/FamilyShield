@@ -48,8 +48,6 @@ interface FsContext {
   /** Return to the current role's home, dropping everything above it. */
   goHome(): void;
   emit(event: HostEvent): void;
-  /** Show demo-only hints and shortcuts. */
-  demo: boolean;
   /** Run an API action with a busy state and a friendly error message. */
   run<T>(action: () => Promise<T>): Promise<T | undefined>;
   busy: boolean;
@@ -112,11 +110,10 @@ async function fetchAll(api: FamilyShieldApi): Promise<FsData> {
 export function FamilyShieldProvider(props: {
   api: FamilyShieldApi;
   emit: (event: HostEvent) => void;
-  demo: boolean;
   initialRoute?: Route;
   children: (state: { ready: boolean; loadError: string | null }) => ReactNode;
 }) {
-  const { api, emit, demo } = props;
+  const { api, emit } = props;
   const [data, setData] = useState<FsData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   // Starts as `hub`; replaced with the right home once data has loaded (below).
@@ -219,7 +216,6 @@ export function FamilyShieldProvider(props: {
     switchRole,
     goHome: () => switchRole(role),
     emit,
-    demo,
     run,
     busy,
     error,

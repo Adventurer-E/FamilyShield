@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { formatMoney } from '@familyshield/core';
 import type { Person } from '@familyshield/core';
 import { useFs } from '../context';
-import { Avatar, Button, DemoHint, Notice, Screen } from '../kit';
+import { Avatar, Button, Notice, Screen } from '../kit';
 
 /**
  * Trusted circle: the people a new request goes to. List them, add someone,
@@ -130,11 +130,6 @@ export function Circle() {
         <Button onClick={() => void add()} disabled={!newContact.trim()}>
           Add to circle
         </Button>
-        <DemoHint>
-          Emails and phones are in <code>data/people.csv</code> (Lisa is <code>lisa.park@example.com</code> or <code>(607) 555-0104</code>). An email or
-          phone nobody has yet creates a new FamilyShield account for it. Later, they’ll get an invitation link, and only join once they verify their bank
-          account.
-        </DemoHint>
       </section>
 
       <Notice>Only you see your circle and the nicknames you give people.</Notice>

@@ -97,7 +97,7 @@ export interface Database {
   loans: LoanCase[];
   transactions: Transaction[];
   /**
-   * Functional mockup only: how many days the mockup's calendar runs ahead of
+   * Mockup only: how many days the mockup's calendar runs ahead of
    * the real date ("Skip ahead" in the toolbar), so late payments can be shown.
    */
   clockDaysAhead: number;
@@ -129,7 +129,7 @@ export const ACTIVITY_TABLES = {
   'pause_answers.csv': ['loan_id', 'lender_id', 'answer'],
   'claimed_rewards.csv': ['loan_id', 'reward_id', 'code'],
   'transactions.csv': ['id', 'user_id', 'at', 'amount', 'memo'],
-  // Functional mockup only: days the mockup's calendar runs ahead of today. Blank or no row = 0.
+  // Mockup only: days the mockup's calendar runs ahead of today. Blank or no row = 0.
   'mockup_clock.csv': ['days_ahead'],
 } as const;
 

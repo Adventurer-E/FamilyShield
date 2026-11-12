@@ -24,7 +24,6 @@ export function FamilyShieldSheet(props: { userId: string; mode: EmbedMode; onCl
     if (mode !== 'inline' || !mountRef.current) return;
     const handle = mountFamilyShield(mountRef.current, {
       api: host.apiFor(userId),
-      demo: true,
       onEvent: (event) => (event.type === 'close' ? handlers.current.onClose() : handlers.current.onEvent(event)),
     });
     return () => handle.unmount();
@@ -40,7 +39,7 @@ export function FamilyShieldSheet(props: { userId: string; mode: EmbedMode; onCl
       if (data?.source !== 'familyshield') return;
       const event = data.event;
       if (event.type === 'loaded') {
-        const init: InitMessage = { source: 'familyshield-host', version: 1, type: 'init', session: { userId }, demo: true };
+        const init: InitMessage = { source: 'familyshield-host', version: 1, type: 'init', session: { userId } };
         frame.postMessage(init, window.location.origin);
       } else if (event.type === 'close') {
         handlers.current.onClose();

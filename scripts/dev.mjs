@@ -1,4 +1,4 @@
-// Starts the functional mockup in server mode:
+// Starts the mockup in server mode:
 //   - the backend server (packages/server) on http://localhost:8787, reading/writing data/*.csv
 //   - the BlueRiver bank app (apps/demo-bank) on http://localhost:5173, talking to it via /v1
 // Ctrl+C stops both.

@@ -10,7 +10,7 @@ export type { AppConfig, CreateRequestInput, Eligibility, Profile };
  *
  * Two implementations ship with the SDK:
  *  - `HttpApi`: talks to a FamilyShield backend over HTTP (docs/API.md), e.g.
- *    the functional-mockup server in packages/server
+ *    the mockup server in packages/server
  *  - `createBrowserMockup().apiFor(userId)`: the same backend logic running
  *    in the browser, over CSV files kept in localStorage
  */

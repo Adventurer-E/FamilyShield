@@ -3,7 +3,7 @@ import type { CsvFiles } from '@familyshield/service';
 import type { FamilyShieldApi } from '../api/types';
 
 /**
- * What a functional-mockup host app (the BlueRiver demo bank) needs beyond the
+ * What a mockup host app (the BlueRiver demo bank) needs beyond the
  * FamilyShield API: who can be "signed in", their bank balance, and a reset.
  * In a real bank these come from the bank's own systems.
  */

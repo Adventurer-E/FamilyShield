@@ -3,7 +3,7 @@ import type { MockupHost } from '@familyshield/sdk/mockup';
 import { SEED_CSV } from './seedCsv';
 
 /**
- * Where the functional mockup's data lives.
+ * Where the mockup's data lives.
  *
  *  - `npm run dev` sets VITE_API_URL=/v1: the backend server reads and
  *    writes the CSV files in data/ (Vite proxies /v1 to it).

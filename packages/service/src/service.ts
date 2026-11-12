@@ -87,7 +87,7 @@ export function redactForLender(loan: LoanCase, viewerId: string): LoanCase {
  */
 export class FamilyShieldService {
   private readonly storage: CsvStorage;
-  /** The current time, including the functional mockup's "Skip ahead" days. */
+  /** The current time, including the mockup's "Skip ahead" days. */
   private readonly now: () => Date;
   /** Set from mockup_clock.csv each time the database is read. */
   private daysAhead = 0;
@@ -267,14 +267,14 @@ export class FamilyShieldService {
     return bankDashboard({ today: toIsoDate(this.now()), loans: db.loans, customers }, db.rules);
   }
 
-  /** Functional mockup only: the date the mockup is on, and how far it runs ahead of today. */
+  /** Mockup only: the date the mockup is on, and how far it runs ahead of today. */
   mockupClock(): MockupClock {
     this.read();
     return { today: toIsoDate(this.now()), daysAhead: this.daysAhead };
   }
 
   /**
-   * Functional mockup only: move the mockup's calendar forward, e.g. a month, so
+   * Mockup only: move the mockup's calendar forward, e.g. a month, so
    * due dates pass and unpaid installments become overdue. "Reset" goes back to today.
    */
   skipAhead(days: number): MockupClock {
