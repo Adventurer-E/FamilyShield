@@ -79,10 +79,10 @@ export function Button(props: {
   );
 }
 
-export function Notice({ children, kind = 'privacy' }: { children: ReactNode; kind?: 'privacy' | 'info' | 'demo' }) {
+export function Notice({ children, kind = 'privacy' }: { children: ReactNode; kind?: 'privacy' | 'info' }) {
   return (
-    <div className={`fs-notice${kind === 'demo' ? ' demo' : ''}`}>
-      {kind === 'privacy' ? <LockIcon size={18} stroke="#163A70" /> : <InfoIcon size={18} stroke={kind === 'demo' ? '#7A4B00' : '#163A70'} />}
+    <div className="fs-notice">
+      {kind === 'privacy' ? <LockIcon size={18} stroke="#163A70" /> : <InfoIcon size={18} stroke="#163A70" />}
       <div>{children}</div>
     </div>
   );
@@ -101,18 +101,6 @@ export function NotEligible({ hideOpenLoan }: { hideOpenLoan?: boolean }) {
         </Notice>
       ))}
     </div>
-  );
-}
-
-/** Shown only when the module runs in demo mode. */
-export function DemoHint({ children }: { children: ReactNode }) {
-  const { demo } = useFs();
-  if (!demo) return null;
-  return (
-    <Notice kind="demo">
-      <strong>Functional mockup: </strong>
-      {children}
-    </Notice>
   );
 }
 

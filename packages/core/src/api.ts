@@ -30,7 +30,7 @@ export interface AppConfig {
   rewards: Reward[];
 }
 
-/** Functional-mockup only: the bank side, so the host app can show balances. */
+/** Mockup only: the bank side, so the host app can show balances. */
 export interface AccountSummary {
   balance: Cents;
   /** FamilyShield money movements, newest first. These change the balance. */
@@ -39,7 +39,7 @@ export interface AccountSummary {
   exampleTransactions: Array<{ id: string; date: string; name: string; category: string; amount: Cents }>;
 }
 
-/** Functional-mockup only: the mockup's calendar ("Skip ahead" in the top bar). */
+/** Mockup only: the mockup's calendar ("Skip ahead" in the top bar). */
 export interface MockupClock {
   /** The date the mockup is on. */
   today: string;
@@ -47,7 +47,7 @@ export interface MockupClock {
   daysAhead: number;
 }
 
-/** Functional-mockup only: someone you can switch to in the top bar. */
+/** Mockup only: someone you can switch to in the top bar. */
 export interface MockupPerson {
   id: string;
   firstName: string;

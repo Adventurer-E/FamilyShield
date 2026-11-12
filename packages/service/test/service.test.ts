@@ -28,6 +28,18 @@ function memoryStorage(initial: CsvFiles): CsvStorage & { files: CsvFiles } {
   };
 }
 
+/** Maya offers $500 and Lisa declines, answered by hand (nobody replies automatically in data/). */
+function familyAnswers(svc: FamilyShieldService, loanId: string) {
+  svc.respond('maya', loanId, { kind: 'offer', amount: 50_000, note: 'You’ve got this.' });
+  svc.respond('lisa', loanId, { kind: 'decline', note: 'Wish I could right now.' });
+}
+
+/** A scripted relative for the tests of the auto-reply feature itself. */
+const SCRIPTED_MAYA = {
+  'auto_replies.csv':
+    'member_id,reply_after_seconds,reply,offer_amount,note,auto_sign,auto_approve_pause\nmaya,2.5,offer,500,You’ve got this.,yes,yes\nlisa,4.5,decline,,Wish I could.,no,no\n',
+};
+
 /** A service on a copy of data/ with a clock we control. */
 function setup(overrides: CsvFiles = {}) {
   let t = Date.parse('2026-11-05T15:00:00.000Z');
@@ -71,7 +83,7 @@ describe('reading data/', () => {
     expect(db.rules.terms).toEqual([6, 10, 12]);
     expect(db.people.find((p) => p.id === 'alex')!.openingBalance).toBe(432_850);
     expect(db.rewards.map((r) => r.id)).toEqual(['dinner', 'trip', 'activity']);
-    expect(db.autoReplies.map((a) => a.memberId)).toEqual(['maya', 'lisa']);
+    expect(db.autoReplies).toEqual([]); // nobody answers on their own in the shared data
   });
 
   it('points at the exact cell when a hand edit is wrong', () => {
@@ -121,7 +133,10 @@ describe('the service over CSVs', () => {
     const { svc, storage, advance } = setup();
 
     const loan = svc.createRequest('alex', { reason: 'car', purpose: 'Car broke down', amount: 150_000, months: 10 });
-    advance(5_000); // Maya (2.5s) and Lisa (4.5s) answer from auto_replies.csv
+    advance(5_000);
+    // Nobody answers on their own: everyone in the circle replies by hand.
+    expect(svc.myLoan('alex')!.offers.every((o) => o.status === 'pending')).toBe(true);
+    familyAnswers(svc, loan.id);
     const offers = svc.myLoan('alex')!.offers.map((o) => `${o.memberId}:${o.status}`);
     expect(offers).toEqual(['mom:pending', 'maya:offered', 'lisa:declined']);
 
@@ -131,7 +146,10 @@ describe('the service over CSVs', () => {
     svc.setOfferAccepted('alex', loan.id, 'mom', true);
     svc.setOfferAccepted('alex', loan.id, 'maya', true);
     svc.signAsBorrower('alex', loan.id);
-    advance(2_000); // Maya auto-signs
+    advance(2_000);
+    // Maya doesn't sign on her own: someone switches to her and signs.
+    expect(svc.myLoan('alex')!.agreements.find((a) => a.lenderId === 'maya')!.lenderSignedAt).toBeUndefined();
+    svc.signAsLender('maya', loan.id);
     expect(svc.myLoan('alex')!.status).toBe('signing');
     svc.signAsLender('mom', loan.id);
     expect(svc.myLoan('alex')!.status).toBe('active');
@@ -176,10 +194,10 @@ describe('the service over CSVs', () => {
   it('reads back exactly what it wrote', () => {
     const { svc, storage, advance } = setup();
     const loan = svc.createRequest('alex', { reason: 'medical', purpose: 'Bill, "urgent"\nsecond line', amount: 100_000, months: 6 });
-    advance(5_000);
+    familyAnswers(svc, loan.id);
     svc.setOfferAccepted('alex', loan.id, 'maya', true);
     svc.signAsBorrower('alex', loan.id);
-    advance(2_000);
+    svc.signAsLender('maya', loan.id);
     svc.makePayment('alex', loan.id);
     svc.requestPause('alex', loan.id);
     const db = readDatabase(storage.files);
@@ -270,7 +288,7 @@ describe('the trusted circle', () => {
   it('withdraws a removed member’s offer on the open request', () => {
     const { svc, advance } = setup();
     const loan = svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 150_000, months: 10 });
-    advance(5_000); // Maya offers, Lisa declines, Mom hasn't answered
+    familyAnswers(svc, loan.id); // Maya offers, Lisa declines, Mom hasn't answered
     svc.setOfferAccepted('alex', loan.id, 'maya', true);
     svc.removeCircleMember('alex', 'maya');
     svc.removeCircleMember('alex', 'mom');
@@ -283,7 +301,7 @@ describe('the trusted circle', () => {
   });
 
   it('stops a scripted relative from answering once removed', () => {
-    const { svc, advance } = setup();
+    const { svc, advance } = setup(SCRIPTED_MAYA);
     svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 150_000, months: 10 });
     svc.removeCircleMember('alex', 'maya');
     advance(5_000);
@@ -438,14 +456,14 @@ describe('who may start a request', () => {
 });
 
 describe('customers who aren’t repaying, and the mockup clock', () => {
-  /** Alex borrows $500 from Maya (auto-offer, auto-sign) on Nov 5, 2026: payments due Dec 5, Jan 5, … */
+  /** Alex borrows $500 from Maya, everyone answering by hand, on Nov 5, 2026: payments due Dec 5, Jan 5, … */
   function funded() {
     const t = setup();
     const loan = t.svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 100_000, months: 6 });
-    t.advance(5_000);
+    familyAnswers(t.svc, loan.id);
     t.svc.setOfferAccepted('alex', loan.id, 'maya', true);
     t.svc.signAsBorrower('alex', loan.id);
-    t.advance(2_000);
+    t.svc.signAsLender('maya', loan.id);
     expect(t.svc.myLoan('alex')!.status).toBe('active');
     return { ...t, loan };
   }
@@ -498,10 +516,10 @@ describe('the bank dashboard', () => {
     // Everyone at the bank is listed, not only people who have borrowed.
     expect(svc.bankDashboard().people.map((p) => p.name)).toEqual(['Alex Chen', 'Grace Chen', 'Lisa Park', 'Maya Lin']);
     const loan = svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 100_000, months: 6 });
-    advance(5_000);
+    familyAnswers(svc, loan.id);
     svc.setOfferAccepted('alex', loan.id, 'maya', true);
     svc.signAsBorrower('alex', loan.id);
-    advance(2_000);
+    svc.signAsLender('maya', loan.id);
     let d = svc.bankDashboard();
     expect(d.money.funded).toBe(50_000);
     expect(d.loans[0]).toMatchObject({ borrowerName: 'Alex Chen', status: 'active', funded: 50_000 });
@@ -510,5 +528,21 @@ describe('the bank dashboard', () => {
     expect(d.asOf).toBe('2026-12-15');
     expect(d.customers.restricted).toBe(1);
     expect(d.overdue).toMatchObject({ loans: 1, amount: 8_751 }); // $525 over 6 months: the first payment carries the extra cent
+  });
+});
+
+describe('scripted relatives (auto_replies.csv)', () => {
+  it('still answer, sign and approve pauses when rows are added', () => {
+    const { svc, advance } = setup(SCRIPTED_MAYA);
+    const loan = svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 100_000, months: 6 });
+    advance(5_000); // Maya (2.5s) offers, Lisa (4.5s) declines
+    expect(svc.myLoan('alex')!.offers.map((o) => `${o.memberId}:${o.status}`)).toEqual(['mom:pending', 'maya:offered', 'lisa:declined']);
+    svc.setOfferAccepted('alex', loan.id, 'maya', true);
+    svc.signAsBorrower('alex', loan.id);
+    advance(2_000); // Maya signs on her own
+    expect(svc.myLoan('alex')!.status).toBe('active');
+    svc.requestPause('alex', loan.id);
+    advance(2_000); // and approves the pause
+    expect(svc.myLoan('alex')!.pause!.status).toBe('approved');
   });
 });

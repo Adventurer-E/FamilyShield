@@ -4,7 +4,7 @@ import { HttpApi } from '../api/http';
 import type { MockupHost } from './types';
 
 /**
- * Functional mockup backed by the Node server (packages/server), which reads
+ * The mockup backed by the Node server (packages/server), which reads
  * and writes the CSV files in data/. The "token" is simply the person's id
  * from data/people.csv.
  */

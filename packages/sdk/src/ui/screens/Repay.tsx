@@ -1,11 +1,11 @@
 import { formatDate, formatMoney, nextInstallment, pointsToGo, repaymentSummary, rewardStatus } from '@familyshield/core';
 import type { LoanCase } from '@familyshield/core';
 import { useFs } from '../context';
-import { Button, DemoHint, Progress, Screen } from '../kit';
+import { Button, Progress, Screen } from '../kit';
 import { AlertIcon, CheckIcon, PauseIcon, StarIcon } from '../icons';
 
 export function Repay({ loan }: { loan: LoanCase }) {
-  const { api, run, go, emit, nameOf, demo, data } = useFs();
+  const { api, run, go, emit, nameOf, data } = useFs();
   const { rules, rewards: REWARDS } = data.config;
   const s = repaymentSummary(loan);
   const next = nextInstallment(loan);
@@ -18,14 +18,6 @@ export function Repay({ loan }: { loan: LoanCase }) {
   const pay = async () => {
     const after = await run(() => api.makePayment(loan.id));
     if (after && next) emit({ type: 'payment.made', loanId: loan.id, amount: next.amount, remaining: repaymentSummary(after).remaining });
-  };
-
-  // Demo only: run the remaining payments back to back.
-  const payAll = async () => {
-    let current: LoanCase | undefined = loan;
-    while (current && current.status === 'active') {
-      current = await run(() => api.makePayment(loan.id));
-    }
   };
 
   return (
@@ -108,11 +100,6 @@ export function Repay({ loan }: { loan: LoanCase }) {
             {next.parts.map((p) => `${p.to === 'fee' ? 'service fee' : nameOf(p.to)} ${formatMoney(p.amount)}`).join(' · ')}
           </div>
           <Button onClick={pay}>Pay {formatMoney(next.amount)} now</Button>
-          {demo ? (
-            <Button variant="ghost" onClick={payAll}>
-              Functional mockup: make all remaining payments
-            </Button>
-          ) : null}
 
           {pause?.status === 'pending' ? (
             <div className="fs-small" style={{ border: '1px dashed #B6BFCD', borderRadius: 12, padding: 12, color: '#3B4659' }}>
@@ -139,7 +126,6 @@ export function Repay({ loan }: { loan: LoanCase }) {
           {pause?.status === 'declined' ? (
             <div className="fs-tiny fs-muted">Your last pause request wasn’t approved. Your schedule is unchanged.</div>
           ) : null}
-          {pause?.status === 'pending' ? <DemoHint>Switch users in the functional mockup bar to answer the pause as a lender.</DemoHint> : null}
         </section>
       ) : null}
 

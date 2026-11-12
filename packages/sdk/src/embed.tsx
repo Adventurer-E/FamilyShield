@@ -48,7 +48,7 @@ export function bootEmbed(options: EmbedOptions): void {
     const emit = createEmbeddedEmitter(hostOrigin);
     createRoot(container).render(
       <StrictMode>
-        <FamilyShieldApp api={options.createApi(message.session)} onEvent={emit} theme={message.theme} demo={message.demo} />
+        <FamilyShieldApp api={options.createApi(message.session)} onEvent={emit} theme={message.theme} />
       </StrictMode>,
     );
   };

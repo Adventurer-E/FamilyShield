@@ -122,7 +122,7 @@ export function App() {
     <div className="demo">
       <header className="demo-bar">
         <div className="demo-brand">
-          FamilyShield <span>functional mockup</span>
+          FamilyShield
         </div>
         <div className="seg" role="group" aria-label="View">
           <span className="seg-label">View</span>
@@ -149,7 +149,7 @@ export function App() {
           </>
         ) : null}
         <div className="seg" role="group" aria-label="Mockup date">
-          <span className="seg-label seg-date" title="The date the functional mockup is on. Skip ahead so payments come due; Reset goes back to today.">
+          <span className="seg-label seg-date" title="The date the mockup is on. Skip ahead so payments come due; Reset goes back to today.">
             {today ? formatDate(today) : 'Today'}
             {bank.clock?.daysAhead ? <span className="ahead"> · +{bank.clock.daysAhead} days</span> : null}
           </span>
@@ -170,7 +170,7 @@ export function App() {
             void host.reset().then(bank.refresh);
           }}
         >
-          Reset functional mockup
+          Reset
         </button>
       </header>
 
@@ -219,9 +219,11 @@ export function App() {
             <h2>Try the whole story</h2>
             <ol>
               <li>As <strong>Alex</strong>, tap the FamilyShield card and send a request.</li>
-              <li>Cousin Maya and Aunt Lisa answer on their own within a few seconds.</li>
-              <li>Switch to <strong>Grace (Mom)</strong> above. Her bank app shows Alex’s request; offer privately.</li>
-              <li>Back as Alex, accept both offers and sign. Maya signs automatically; switch to Mom to sign hers.</li>
+              <li>
+                Switch to <strong>Grace (Mom)</strong>, <strong>Maya</strong> or <strong>Lisa</strong> above. Each one’s bank app shows Alex’s
+                request; offer or decline privately.
+              </li>
+              <li>Back as Alex, accept the offers and sign. Then switch to each lender, and they sign their own agreement.</li>
               <li>Watch both balances move. Make payments (or skip to the last one), then claim a partner reward.</li>
               <li>
                 Or don’t pay: use <strong>+1 month</strong> above. A payment more than a few days late is overdue, and the borrower can’t offer to
@@ -240,7 +242,7 @@ export function App() {
             <strong>Bank dashboard</strong> (top bar) is what BlueRiver’s staff see: money lent and repaid, fees, on-time payments and overdue
             loans across every customer.
           </p>
-          <p className="fine">All people, partners and money here are fictional. “Reset functional mockup” goes back to the shared starting state in data/.</p>
+          <p className="fine">All people, partners and money here are fictional. “Reset” goes back to the shared starting state in data/.</p>
           </aside>
         </div>
       )}

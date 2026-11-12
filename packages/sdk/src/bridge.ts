@@ -35,7 +35,6 @@ export interface InitMessage {
   /** Opaque to the SDK; passed to the embed page's `createApi`. */
   session: Record<string, unknown>;
   theme?: Partial<import('./theme').Theme>;
-  demo?: boolean;
 }
 
 export function isInitMessage(data: unknown): data is InitMessage {

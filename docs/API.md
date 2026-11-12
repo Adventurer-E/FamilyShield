@@ -1,7 +1,7 @@
 # FamilyShield service API (v1)
 
 This is the contract `HttpApi` (`packages/sdk/src/api/http.ts`) expects.
-`packages/server` implements it for the functional mockup, on top of the CSV
+`packages/server` implements it for the mockup, on top of the CSV
 files in `data/`; a production service would implement the same contract on a
 real database.
 
@@ -127,7 +127,7 @@ Paying clears it: each payment goes to the oldest unpaid installment.
 
 For the partner bank's staff, not customers. In production these sit behind
 the bank's own staff sign-in and are never reachable with a customer token;
-the functional mockup has no staff sign-in.
+the mockup has no staff sign-in.
 
 | Method & path | Returns | Notes |
 | --- | --- | --- |
@@ -136,7 +136,7 @@ the functional mockup has no staff sign-in.
 The bank sees its customers' names, amounts, status and payment history, but
 not what a request was for or the notes family members wrote to each other.
 
-### Functional mockup only
+### Mockup only
 
 These stand in for the bank’s own systems and are **not** part of the production contract.
 

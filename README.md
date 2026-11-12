@@ -9,7 +9,7 @@ is hit by a car repair, a medical bill or a lost job, they can ask their trusted
 family circle for help privately, receive private offers, sign clear
 interest-free terms, and repay automatically, all without leaving their bank’s app.
 
-**▶ [Try the live functional mockup](https://adventurer-e.github.io/FamilyShield/)**: no install needed. It runs entirely in your browser.
+**▶ [Try the live mockup](https://adventurer-e.github.io/FamilyShield/)**: no install needed. It runs entirely in your browser.
 Every pull request also gets its own preview link, posted as a comment on the pull request.
 
 > **Status:** working prototype. Every person, bank, partner and dollar in this
@@ -129,7 +129,7 @@ More in [Testing and checks](https://github.com/Adventurer-E/FamilyShield/wiki/T
 
 ### What’s next
 
-The functional mockup covers the full customer experience. Before a pilot it would need:
+The mockup covers the full customer experience. Before a pilot it would need:
 
 - [ ] Production storage: swap the CSV files for a real database with an audit log (the service’s `CsvStorage` interface is the seam)
 - [ ] Bank-side integration: token exchange, and money movement through the bank’s payment rails

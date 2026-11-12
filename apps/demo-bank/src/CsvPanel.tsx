@@ -42,7 +42,7 @@ export function CsvPanel({ onClose }: { onClose: () => void }) {
               </li>
             </ul>
             <p>
-              “Reset functional mockup” (or <code>npm run data:reset</code>) goes back to the shared starting state. <code>npm run data:save</code>{' '}
+              “Reset” (or <code>npm run data:reset</code>) goes back to the shared starting state. <code>npm run data:save</code>{' '}
               copies your state into <code>data/</code> so you can commit and share it. See <code>data/README.md</code>.
             </p>
           </>

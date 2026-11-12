@@ -7,7 +7,7 @@ import type { LoanCase } from './types';
  * a referral commission on bookings. Offers unlock only when the loan is fully
  * repaid AND the circle's points have reached the threshold.
  *
- * The partners below are placeholders. In the functional mockup the catalog
+ * The partners below are placeholders. In the mockup the catalog
  * comes from data/rewards.csv; this list is the default.
  */
 export interface Reward {

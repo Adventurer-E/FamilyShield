@@ -7,7 +7,7 @@ import type { FamilyShieldService } from '@familyshield/service';
 /**
  * The HTTP API from docs/API.md, on Node's built-in http module.
  *
- * Authentication (functional mockup only): `Authorization: Bearer <user id>`,
+ * Authentication (mockup only): `Authorization: Bearer <user id>`,
  * where the id is a row in data/people.csv. A real deployment swaps this for
  * short-lived tokens minted by the bank (docs/INTEGRATION.md).
  */
@@ -124,7 +124,7 @@ export function createApp(service: FamilyShieldService, options: { allowOrigin?:
   // ---- bank staff (in production: behind the bank's staff sign-in, never a customer token)
   route('GET', '/v1/bank/dashboard', () => service.bankDashboard());
 
-  // ---- functional mockup helpers (not part of the production API)
+  // ---- mockup helpers (not part of the production API)
   route('GET', '/v1/mockup/people', () => service.people());
   route('GET', '/v1/mockup/accounts/:userId', (c) => service.account(c.params.userId!));
   route('GET', '/v1/mockup/clock', () => service.mockupClock());

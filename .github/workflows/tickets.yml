@@ -19,7 +19,7 @@ on:
   push:
     branches: [main] # direct pushes are recorded as rule exceptions
   workflow_run: # checks that finish after the approval: merge then
-    workflows: [CI, Deploy functional mockup to GitHub Pages]
+    workflows: [CI, Deploy to GitHub Pages]
     types: [completed]
   schedule:
     - cron: '*/10 * * * *' # pick up cards dragged on the board

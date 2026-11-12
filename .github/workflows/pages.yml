@@ -1,6 +1,6 @@
-name: Deploy functional mockup to GitHub Pages
+name: Deploy to GitHub Pages
 
-# Publishes the BlueRiver functional mockup (apps/demo-bank), in browser mode
+# Publishes the BlueRiver mockup (apps/demo-bank), in browser mode
 # (CSV files from data/ bundled into the page), to the gh-pages branch:
 #
 #   main               → https://adventurer-e.github.io/FamilyShield/
@@ -48,7 +48,7 @@ jobs:
           cache: npm
           cache-dependency-path: package.json
 
-      - name: Build functional mockup
+      - name: Build the mockup
         if: github.event.action != 'closed'
         run: |
           npm install --no-audit --no-fund

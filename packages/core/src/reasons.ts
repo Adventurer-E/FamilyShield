@@ -2,7 +2,7 @@ import type { Reason } from './types';
 
 /**
  * The "What happened?" choices on the request screen, each with the
- * description it pre-fills. In the functional mockup they come from
+ * description it pre-fills. In the mockup they come from
  * data/reasons.csv; this list is the default.
  */
 export interface ReasonOption {

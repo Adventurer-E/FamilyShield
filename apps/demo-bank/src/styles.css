@@ -23,7 +23,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
   padding: 10px 16px; background: var(--ink); color: #fff; font-size: 13px;
 }
 .demo-brand { font-weight: 800; font-size: 15px; margin-right: auto; }
-.demo-brand span { font-weight: 600; color: #f2c14e; margin-left: 4px; }
 .seg { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .seg-label { color: #aab4c6; margin-right: 4px; }
 .seg button, .reset {
@@ -111,7 +110,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .toast span { display: block; font-size: 11px; font-weight: 600; color: #aab4c6; margin-top: 2px; }
 
-/* ---------- functional mockup: data source ---------- */
+/* ---------- mockup: data source ---------- */
 .seg select {
   border: 1px solid #3b4a66; background: #1d2c47; color: #fff; border-radius: 999px;
   padding: 6px 12px; min-height: 34px; font: inherit; font-weight: 700; font-size: 13px;
