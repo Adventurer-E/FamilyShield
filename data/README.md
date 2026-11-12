@@ -104,8 +104,10 @@ Use `example.com` emails and `555-01xx` numbers so they stay fictional.
 | `auto_sign` | Sign the agreement automatically after the borrower signs |
 | `auto_approve_pause` | Approve pause requests automatically |
 
-Anyone not listed (Mom, in the default data) waits for a real person: switch to
-them in **Viewing as**.
+**Empty in the shared data**: nobody answers on their own, so every reply,
+signature and pause answer is made by switching to that person in **Viewing
+as**. Add a row to script someone, e.g. to demo the borrower's side alone;
+anyone not listed waits for a real person.
 
 ### `reasons.csv`: what can happen
 

@@ -60,7 +60,7 @@ export function Offers({ loan }: { loan: LoanCase }) {
       ) : null}
 
       {pending.length > 0 ? (
-        <DemoHint>Some of your circle answer automatically. To answer as someone else, switch users in the functional mockup bar.</DemoHint>
+        <DemoHint>To answer as someone in your circle, switch users in the functional mockup bar.</DemoHint>
       ) : null}
 
       <div className="fs-between" style={{ padding: '4px 2px 0' }}>
