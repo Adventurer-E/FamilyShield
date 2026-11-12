@@ -131,7 +131,10 @@ describe('the service over CSVs', () => {
     svc.setOfferAccepted('alex', loan.id, 'mom', true);
     svc.setOfferAccepted('alex', loan.id, 'maya', true);
     svc.signAsBorrower('alex', loan.id);
-    advance(2_000); // Maya auto-signs
+    advance(2_000);
+    // Maya doesn't sign on her own (auto_sign = no in auto_replies.csv): someone switches to her and signs.
+    expect(svc.myLoan('alex')!.agreements.find((a) => a.lenderId === 'maya')!.lenderSignedAt).toBeUndefined();
+    svc.signAsLender('maya', loan.id);
     expect(svc.myLoan('alex')!.status).toBe('signing');
     svc.signAsLender('mom', loan.id);
     expect(svc.myLoan('alex')!.status).toBe('active');
@@ -179,7 +182,7 @@ describe('the service over CSVs', () => {
     advance(5_000);
     svc.setOfferAccepted('alex', loan.id, 'maya', true);
     svc.signAsBorrower('alex', loan.id);
-    advance(2_000);
+    svc.signAsLender('maya', loan.id);
     svc.makePayment('alex', loan.id);
     svc.requestPause('alex', loan.id);
     const db = readDatabase(storage.files);
@@ -438,14 +441,14 @@ describe('who may start a request', () => {
 });
 
 describe('customers who aren’t repaying, and the mockup clock', () => {
-  /** Alex borrows $500 from Maya (auto-offer, auto-sign) on Nov 5, 2026: payments due Dec 5, Jan 5, … */
+  /** Alex borrows $500 from Maya (her automatic offer; she signs by hand) on Nov 5, 2026: payments due Dec 5, Jan 5, … */
   function funded() {
     const t = setup();
     const loan = t.svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 100_000, months: 6 });
     t.advance(5_000);
     t.svc.setOfferAccepted('alex', loan.id, 'maya', true);
     t.svc.signAsBorrower('alex', loan.id);
-    t.advance(2_000);
+    t.svc.signAsLender('maya', loan.id);
     expect(t.svc.myLoan('alex')!.status).toBe('active');
     return { ...t, loan };
   }
@@ -501,7 +504,7 @@ describe('the bank dashboard', () => {
     advance(5_000);
     svc.setOfferAccepted('alex', loan.id, 'maya', true);
     svc.signAsBorrower('alex', loan.id);
-    advance(2_000);
+    svc.signAsLender('maya', loan.id);
     let d = svc.bankDashboard();
     expect(d.money.funded).toBe(50_000);
     expect(d.loans[0]).toMatchObject({ borrowerName: 'Alex Chen', status: 'active', funded: 50_000 });

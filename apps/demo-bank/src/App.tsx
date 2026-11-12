@@ -221,7 +221,7 @@ export function App() {
               <li>As <strong>Alex</strong>, tap the FamilyShield card and send a request.</li>
               <li>Cousin Maya and Aunt Lisa answer on their own within a few seconds.</li>
               <li>Switch to <strong>Grace (Mom)</strong> above. Her bank app shows Alex’s request; offer privately.</li>
-              <li>Back as Alex, accept both offers and sign. Maya signs automatically; switch to Mom to sign hers.</li>
+              <li>Back as Alex, accept both offers and sign. Then switch to Maya and to Mom, and each signs their own agreement.</li>
               <li>Watch both balances move. Make payments (or skip to the last one), then claim a partner reward.</li>
               <li>
                 Or don’t pay: use <strong>+1 month</strong> above. A payment more than a few days late is overdue, and the borrower can’t offer to
