@@ -1,5 +1,5 @@
 import { FamilyShieldError } from '@familyshield/core';
-import type { AccountSummary, MockupClock, MockupPerson } from '@familyshield/core';
+import type { AccountSummary, BankDashboard, MockupClock, MockupPerson } from '@familyshield/core';
 import { HttpApi } from '../api/http';
 import type { MockupHost } from './types';
 
@@ -40,6 +40,7 @@ export function createServerMockup(options: { baseUrl: string; pollIntervalMs?: 
     },
     people: () => call<MockupPerson[]>('GET', '/mockup/people'),
     account: (userId) => call<AccountSummary>('GET', `/mockup/accounts/${encodeURIComponent(userId)}`),
+    bankDashboard: () => call<BankDashboard>('GET', '/bank/dashboard'),
     clock: () => call<MockupClock>('GET', '/mockup/clock'),
     async skipAhead(days) {
       const clock = await call<MockupClock>('POST', '/mockup/clock/skip', { days });

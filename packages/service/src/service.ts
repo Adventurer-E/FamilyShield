@@ -1,6 +1,7 @@
 import {
   FamilyShieldError,
   assertEligible,
+  bankDashboard,
   cancelPause,
   checkEligibility,
   cancelRequest,
@@ -21,6 +22,7 @@ import type {
   AccountSummary,
   AppConfig,
   MockupClock,
+  BankDashboard,
   CreateRequestInput,
   Eligibility,
   LenderResponse,
@@ -246,6 +248,23 @@ export class FamilyShieldService {
   reset(): void {
     if (this.storage.reset) this.storage.reset();
     else this.storage.write(emptyActivity());
+  }
+
+  // ------------------------------------------------------------ bank staff
+
+  /**
+   * The partner bank's dashboard: activity and risk figures across every loan (C3).
+   * For bank staff only; in production this sits behind the bank's own staff
+   * sign-in, never a customer token.
+   */
+  bankDashboard(): BankDashboard {
+    const db = this.open();
+    const customers = db.people.map((p) => ({
+      id: p.id,
+      name: `${p.firstName} ${p.lastName}`.trim(),
+      circle: db.circles.filter((c) => c.ownerId === p.id).length,
+    }));
+    return bankDashboard({ today: toIsoDate(this.now()), loans: db.loans, customers }, db.rules);
   }
 
   /** Functional mockup only: the date the mockup is on, and how far it runs ahead of today. */
