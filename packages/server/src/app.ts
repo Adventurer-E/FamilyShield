@@ -121,6 +121,9 @@ export function createApp(service: FamilyShieldService, options: { allowOrigin?:
   route('POST', '/v1/loans/:id/lender-signature', (c) => service.signAsLender(c.user(), c.params.id!));
   route('POST', '/v1/loans/:id/pause/responses', (c) => service.respondToPause(c.user(), c.params.id!, boolean(c.body.approve, 'approve')));
 
+  // ---- bank staff (in production: behind the bank's staff sign-in, never a customer token)
+  route('GET', '/v1/bank/dashboard', () => service.bankDashboard());
+
   // ---- functional mockup helpers (not part of the production API)
   route('GET', '/v1/mockup/people', () => service.people());
   route('GET', '/v1/mockup/accounts/:userId', (c) => service.account(c.params.userId!));

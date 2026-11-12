@@ -129,6 +129,7 @@ export function createBrowserMockup(options: { files: CsvFiles; storageKey?: str
     },
     people: () => async(() => service.people()),
     account: (userId) => async(() => service.account(userId)),
+    bankDashboard: () => async(() => service.bankDashboard()),
     clock: () => async(() => service.mockupClock()),
     skipAhead: (days) => async(() => service.skipAhead(days)),
     reset: () => async(() => service.reset()),

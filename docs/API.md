@@ -123,6 +123,19 @@ Paying clears it: each payment goes to the oldest unpaid installment.
 | `POST /loans/:id/lender-signature` | — | `signAsLender`; the last signature triggers funding |
 | `POST /loans/:id/pause/responses` | `{ approve: boolean }` | `respondToPause` |
 
+### Bank staff
+
+For the partner bank's staff, not customers. In production these sit behind
+the bank's own staff sign-in and are never reachable with a customer token;
+the functional mockup has no staff sign-in.
+
+| Method & path | Returns | Notes |
+| --- | --- | --- |
+| `GET /bank/dashboard` | `BankDashboard` | Activity and risk figures across every loan, as of the bank's date (`bankDashboard` in `packages/core/src/dashboard.ts`): `customers` (borrowers, lenders, restricted), `requests` (total and by status), `money` (requested, funded, repaid to lenders, outstanding, fees collected and contracted), `payments` (made, on time, late, on-time rate), `overdue` (loans, amount to catch up, principal at risk), and `loans`: one row per request that wasn't cancelled, overdue first. Amounts in cents |
+
+The bank sees its customers' names, amounts, status and payment history, but
+not what a request was for or the notes family members wrote to each other.
+
 ### Functional mockup only
 
 These stand in for the bank’s own systems and are **not** part of the production contract.

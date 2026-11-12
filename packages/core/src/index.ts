@@ -7,6 +7,7 @@ export * from './loan';
 export * from './selectors';
 export * from './overdue';
 export * from './eligibility';
+export * from './dashboard';
 export * from './rewards';
 export * from './reasons';
 export * from './api';

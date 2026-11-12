@@ -490,3 +490,23 @@ describe('customers who aren’t repaying, and the mockup clock', () => {
     expect(svc.myLoan('alex')!.schedule[0]!.paidAt!.slice(0, 10)).toBe('2026-12-15');
   });
 });
+
+describe('the bank dashboard', () => {
+  it('follows the family story', () => {
+    const { svc, advance } = setup();
+    expect(svc.bankDashboard().requests.total).toBe(0);
+    const loan = svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 100_000, months: 6 });
+    advance(5_000);
+    svc.setOfferAccepted('alex', loan.id, 'maya', true);
+    svc.signAsBorrower('alex', loan.id);
+    advance(2_000);
+    let d = svc.bankDashboard();
+    expect(d.money.funded).toBe(50_000);
+    expect(d.loans[0]).toMatchObject({ borrowerName: 'Alex Chen', status: 'active', funded: 50_000 });
+    svc.skipAhead(40);
+    d = svc.bankDashboard();
+    expect(d.asOf).toBe('2026-12-15');
+    expect(d.customers.restricted).toBe(1);
+    expect(d.overdue).toMatchObject({ loans: 1, amount: 8_751 }); // $525 over 6 months: the first payment carries the extra cent
+  });
+});
