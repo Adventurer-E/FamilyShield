@@ -141,6 +141,27 @@ function TrustedCircle() {
 }
 
 /**
+ * "Join the pilot" card on both homes. Opens settings.csv's pilot_signup_url
+ * (the waitlist form, or a click-counting short link to it) in a new tab.
+ * Hidden when the setting is blank.
+ */
+function PilotSignup() {
+  const url = useFs().data.config.rules.pilotSignupUrl;
+  if (!url) return null;
+  return (
+    <section className="fs-card soft" aria-labelledby="fs-pilot">
+      <h2 id="fs-pilot" className="fs-h3">Want FamilyShield for your family?</h2>
+      <p className="fs-small" style={{ margin: 0, color: '#3B4659' }}>
+        We’re starting a small pilot. Leave your email to get early access.
+      </p>
+      <a className="fs-btn primary" href={url} target="_blank" rel="noopener noreferrer">
+        Join the pilot
+      </a>
+    </section>
+  );
+}
+
+/**
  * Borrower home. Placeholder content reused from the old shared hub;
  * the real layout is ticket B1 (#27).
  */
@@ -209,6 +230,7 @@ export function BorrowerHome() {
       ) : null}
 
       <TrustedCircle />
+      <PilotSignup />
     </Screen>
   );
 }
@@ -251,6 +273,7 @@ export function LenderHome() {
       )}
 
       <TrustedCircle />
+      <PilotSignup />
     </Screen>
   );
 }
