@@ -233,6 +233,16 @@ describe('the service over CSVs', () => {
   });
 });
 
+describe('pilot sign-up link', () => {
+  it('reads pilot_signup_url, hides the button when blank, and rejects non-links', () => {
+    const base = loadDataDir();
+    expect(readDatabase(base).rules.pilotSignupUrl).toMatch(/^https:\/\//);
+    const withValue = (v: string) => ({ ...base, 'settings.csv': base['settings.csv']!.replace(/^pilot_signup_url,[^,]*,/m, `pilot_signup_url,${v},`) });
+    expect(readDatabase(withValue('')).rules.pilotSignupUrl).toBeUndefined();
+    expect(() => readDatabase(withValue('forms.gle/abc'))).toThrow(/pilot_signup_url|https/);
+  });
+});
+
 describe('the trusted circle', () => {
   const ids = (people: Array<{ id: string }>) => people.map((p) => p.id);
 

@@ -21,6 +21,11 @@ export interface Rules {
   offerAmounts: Cents[];
   /** How many one-month pauses a borrower may ask for over a loan's life. */
   maxPauses: number;
+  /**
+   * Link behind the "Join the pilot" button on both homes (e.g. the waitlist
+   * form, or a short link that counts clicks). Blank hides the button.
+   */
+  pilotSignupUrl?: string;
   /** Days after a due date before an unpaid installment counts as overdue (see overdue.ts). */
   overdueGraceDays: number;
   /** Family points. Points belong to the whole circle on a loan, not one person. */
