@@ -6,6 +6,7 @@ export * from './types';
 export * from './loan';
 export * from './selectors';
 export * from './overdue';
+export * from './lender';
 export * from './eligibility';
 export * from './dashboard';
 export * from './rewards';
