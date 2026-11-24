@@ -18,6 +18,8 @@ export interface Profile {
 
 export interface CreateRequestInput {
   reason: Reason;
+  /** Required when reason is 'custom': what happened, in the borrower's own words. Ignored otherwise. */
+  reasonLabel?: string;
   purpose: string;
   amount: Cents;
   months: number;

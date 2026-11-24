@@ -376,6 +376,7 @@ export class FamilyShieldService {
         borrowerId: userId,
         circle: db.circles.filter((c) => c.ownerId === userId).map((c) => c.memberId),
         reason: input.reason,
+        reasonLabel: input.reasonLabel,
         purpose: input.purpose,
         amount: input.amount,
         months: input.months,
