@@ -94,6 +94,7 @@ export function createApp(service: FamilyShieldService, options: { allowOrigin?:
   route('POST', '/v1/loans', (c) => {
     const input: CreateRequestInput = {
       reason: str(c.body.reason, 'reason') as CreateRequestInput['reason'],
+      ...(typeof c.body.reasonLabel === 'string' ? { reasonLabel: c.body.reasonLabel } : {}),
       purpose: str(c.body.purpose, 'purpose'),
       amount: numb(c.body.amount, 'amount'),
       months: numb(c.body.months, 'months'),
