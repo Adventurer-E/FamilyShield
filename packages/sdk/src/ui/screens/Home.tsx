@@ -140,6 +140,27 @@ function TrustedCircle() {
   );
 }
 
+/**
+ * "Join the pilot" card on both homes. Opens settings.csv's pilot_signup_url
+ * (the waitlist form, or a click-counting short link to it) in a new tab.
+ * Hidden when the setting is blank.
+ */
+function PilotSignup() {
+  const url = useFs().data.config.rules.pilotSignupUrl;
+  if (!url) return null;
+  return (
+    <section className="fs-card soft" aria-labelledby="fs-pilot">
+      <h2 id="fs-pilot" className="fs-h3">Want FamilyShield for your family?</h2>
+      <p className="fs-small" style={{ margin: 0, color: '#3B4659' }}>
+        We’re starting a small pilot. Leave your email to get early access.
+      </p>
+      <a className="fs-btn primary" href={url} target="_blank" rel="noopener noreferrer">
+        Join the pilot
+      </a>
+    </section>
+  );
+}
+
 /** How one private offer stands, in the borrower's words. */
 function offerStatus(o: Offer): { text: string; pill: '' | 'brand' | 'solid' } {
   if (o.status === 'offered') return o.accepted ? { text: 'Accepted', pill: 'solid' } : { text: 'Offered', pill: 'brand' };
@@ -187,7 +208,7 @@ function agreementStatus(loan: LoanCase, a: Agreement): string {
   if (!a.lenderSignedAt) return 'Waiting for their signature';
   const ls = lenderSummary(loan, a.lenderId);
   if (loan.status === 'repaid' || ls.outstanding <= 0) return `Repaid in full · ${formatMoney(ls.lent)}`;
-  if (loan.status === 'signing') return 'Signed by both · starts once everyone signs';
+  if (loan.status === 'signing') return 'Signed · waiting for the other lenders';
   return `Repaid ${formatMoney(ls.received)} of ${formatMoney(ls.lent)}`;
 }
 
@@ -274,6 +295,7 @@ export function BorrowerHome() {
       ) : null}
 
       <TrustedCircle />
+      <PilotSignup />
     </Screen>
   );
 }
@@ -316,6 +338,7 @@ export function LenderHome() {
       )}
 
       <TrustedCircle />
+      <PilotSignup />
     </Screen>
   );
 }

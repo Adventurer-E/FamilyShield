@@ -8,6 +8,7 @@ default_request,1500,Amount the request screen starts at in dollars (between min
 default_term_months,10,Term the request screen starts at (must be one of terms_months)
 lender_offer_amounts,250|500|1000,Quick-pick offer amounts a lender sees in dollars (separate with |); only those up to the request show
 max_pauses,1,How many one-month pauses a borrower can ask for per loan
+pilot_signup_url,https://docs.google.com/forms/d/e/1FAIpQLSfzW4-aZcrknlBLv9DNjGuOECPuKtrcJfqBywICoikZL8hyFA/viewform,Link behind the Join the pilot button on both FamilyShield homes; blank hides the button
 points_per_helper,100,Family points for each relative who funds the loan
 points_per_on_time_payment,80,Family points for each payment made on or before its due date
 points_on_full_repayment,200,Bonus family points when the loan is fully repaid

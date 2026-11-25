@@ -255,6 +255,12 @@ function readRules(files: CsvFiles): Rules {
       case 'max_pauses':
         rules.maxPauses = int(r, 'value');
         break;
+      case 'pilot_signup_url': {
+        const url = opt(r, 'value');
+        if (url && !/^https?:\/\//i.test(url)) fail(r, 'value', 'must start with https:// (or leave it blank to hide the button)');
+        rules.pilotSignupUrl = url;
+        break;
+      }
       case 'overdue_grace_days':
         rules.overdueGraceDays = int(r, 'value');
         break;
