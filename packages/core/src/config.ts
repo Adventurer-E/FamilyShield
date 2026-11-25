@@ -8,11 +8,15 @@ import type { Cents } from './money';
 export interface Rules {
   /** One-time service fee charged to the borrower, added to what they repay. */
   feeRate: number;
-  /** Request limits, in cents. */
+  /** Request limits, in cents. Any whole-dollar amount in between is allowed. */
   amountMin: Cents;
   amountMax: Cents;
+  /** How far the request screen's − and + buttons move the amount. Not a rule: borrowers can type any amount. */
   amountStep: Cents;
-  /** Repayment terms a borrower can choose, in months. */
+  /** Shortest and longest repayment term, in months. Any whole number of months in between is allowed. */
+  termMin: number;
+  termMax: number;
+  /** Suggested terms shown as one-tap choices on the request screen, in months (each between termMin and termMax). */
   terms: number[];
   /** Where the request screen starts: amount in cents, term in months. */
   defaultAmount: Cents;
@@ -44,6 +48,8 @@ export const DEFAULT_RULES: Rules = {
   amountMin: 50_000, // $500
   amountMax: 500_000, // $5,000
   amountStep: 25_000, // $250
+  termMin: 3,
+  termMax: 24,
   terms: [6, 10, 12],
   defaultAmount: 150_000, // $1,500
   defaultTerm: 10,

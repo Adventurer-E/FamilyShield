@@ -43,7 +43,7 @@ in `packages/core/src/types.ts`. `Profile` is defined in
 
 | Method & path | Returns | Notes |
 | --- | --- | --- |
-| `GET /config` | `AppConfig` | `{ rules, reasons, rewards }`: the fee, limits, terms, request defaults (`defaultAmount`, `defaultTerm`), lender quick-pick amounts (`offerAmounts`), points, the request reasons with their pre-filled descriptions, and the reward catalog in force (from `settings.csv`, `reasons.csv` and `rewards.csv` in the mockup). No auth needed |
+| `GET /config` | `AppConfig` | `{ rules, reasons, rewards }`: the fee, limits (`amountMin`, `amountMax`, `termMin`, `termMax`), suggested terms (`terms`), request defaults (`defaultAmount`, `defaultTerm`), lender quick-pick amounts (`offerAmounts`), points, the request reasons with their pre-filled descriptions, and the reward catalog in force (from `settings.csv`, `reasons.csv` and `rewards.csv` in the mockup). No auth needed |
 | `GET /me` | `Profile` | The caller, their circle, the people they may see, and their linked account |
 | `GET /me/loan` | `LoanCase \| null` | The caller’s latest loan as borrower (excluding cancelled) |
 | `GET /me/incoming` | `LoanCase[]` | Requests the caller was asked on, **redacted** for a lender, newest first. Cancelled requests are included, so lenders can see what happened. See “The lender home” below |
@@ -79,7 +79,7 @@ Rules:
 
 | Method & path | Body | Core function |
 | --- | --- | --- |
-| `POST /loans` | `{ reason, purpose, amount, months }` | `createLoanCase`; fails with `NOT_ELIGIBLE` if the caller may not start a request (below) |
+| `POST /loans` | `{ reason, reasonLabel?, purpose, amount, months }`: `amount` is any whole-dollar amount in cents within the limits, `months` any whole number within `termMin`–`termMax`, and `reasonLabel` (up to 40 characters) is required when `reason` is `custom` | `createLoanCase`; fails with `NOT_ELIGIBLE` if the caller may not start a request (below) |
 | `POST /loans/:id/cancel` | — | `cancelRequest` |
 | `POST /loans/:id/offers/:memberId/acceptance` | `{ amount }` or `{ accepted: boolean }` | `setOfferTaken`: take `amount` cents of that offer (0 = not taking it). `{ accepted }` takes all or none of it (`setOfferAccepted`). See “Taking part of an offer” below |
 | `POST /loans/:id/sign` | — | `signAsBorrower` |

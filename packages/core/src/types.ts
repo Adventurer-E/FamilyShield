@@ -11,7 +11,8 @@ export interface Person {
   nickname?: string;
 }
 
-export type Reason = 'car' | 'medical' | 'job' | 'other';
+/** A preset reason from reasons.csv, or 'custom' when the borrower wrote their own (see LoanCase.reasonLabel). */
+export type Reason = 'car' | 'medical' | 'job' | 'other' | 'custom';
 
 export type OfferStatus = 'pending' | 'offered' | 'declined' | 'expired';
 
@@ -85,6 +86,8 @@ export interface LoanCase {
   id: string;
   borrowerId: PersonId;
   reason: Reason;
+  /** The borrower's own words for what happened, only when reason is 'custom'. */
+  reasonLabel?: string;
   purpose: string;
   amount: Cents;
   months: number;

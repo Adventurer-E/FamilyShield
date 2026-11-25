@@ -119,7 +119,7 @@ export const ACTIVITY_TABLES = {
   'circles.csv': ['owner_id', 'member_id', 'nickname'],
   // Accounts created when someone adds an email or phone that nobody in people.csv has.
   'new_people.csv': ['id', 'first_name', 'last_name', 'email', 'phone', 'created_by', 'created_at'],
-  'loans.csv': ['id', 'borrower_id', 'reason', 'purpose', 'amount', 'months', 'status', 'created_at', 'funded_at', 'repaid_at', 'points', 'pauses_used'],
+  'loans.csv': ['id', 'borrower_id', 'reason', 'reason_label', 'purpose', 'amount', 'months', 'status', 'created_at', 'funded_at', 'repaid_at', 'points', 'pauses_used'],
   'offers.csv': ['loan_id', 'member_id', 'status', 'amount', 'accepted', 'taken', 'note', 'responded_at'],
   'agreements.csv': ['loan_id', 'lender_id', 'principal', 'interest_rate_percent', 'fee', 'total', 'borrower_signed_at', 'lender_signed_at'],
   'installments.csv': ['loan_id', 'number', 'due_date', 'amount', 'paid_at', 'on_time'],
@@ -234,6 +234,12 @@ function readRules(files: CsvFiles): Rules {
           });
         if (rules.terms.length === 0) fail(r, 'value', 'list at least one term, e.g. 6|10|12');
         break;
+      case 'min_term_months':
+        rules.termMin = int(r, 'value');
+        break;
+      case 'max_term_months':
+        rules.termMax = int(r, 'value');
+        break;
       case 'default_request':
         rules.defaultAmount = money(r, 'value');
         break;
@@ -280,12 +286,20 @@ function readRules(files: CsvFiles): Rules {
     }
   }
   if (rules.amountMin > rules.amountMax) throw new CsvDataError('settings.csv: min_request is larger than max_request.');
+  if (rules.amountMin % 100 !== 0 || rules.amountMax % 100 !== 0)
+    throw new CsvDataError('settings.csv: min_request and max_request must be whole dollars.');
   if (rules.amountStep <= 0) throw new CsvDataError('settings.csv: request_step must be more than 0.');
+  if (rules.termMin < 1) throw new CsvDataError('settings.csv: min_term_months must be at least 1.');
+  if (rules.termMin > rules.termMax) throw new CsvDataError('settings.csv: min_term_months is larger than max_term_months.');
+  const outside = rules.terms.filter((t) => t < rules.termMin || t > rules.termMax);
+  if (outside.length > 0)
+    throw new CsvDataError(`settings.csv: terms_months ${outside.join(', ')} must be between min_term_months and max_term_months.`);
   if (rules.feeRate < 0) throw new CsvDataError('settings.csv: fee_rate_percent can’t be negative.');
   if (rules.defaultAmount < rules.amountMin || rules.defaultAmount > rules.amountMax)
     throw new CsvDataError('settings.csv: default_request must be between min_request and max_request.');
-  if (!rules.terms.includes(rules.defaultTerm))
-    throw new CsvDataError('settings.csv: default_term_months must be one of terms_months.');
+  if (rules.defaultAmount % 100 !== 0) throw new CsvDataError('settings.csv: default_request must be whole dollars.');
+  if (!Number.isInteger(rules.defaultTerm) || rules.defaultTerm < rules.termMin || rules.defaultTerm > rules.termMax)
+    throw new CsvDataError('settings.csv: default_term_months must be between min_term_months and max_term_months.');
   if (rules.overdueGraceDays < 0) throw new CsvDataError('settings.csv: overdue_grace_days can’t be negative.');
   return rules;
 }
@@ -362,7 +376,10 @@ function readCircles(files: CsvFiles, people: PersonRow[]): CircleRow[] {
   });
 }
 
+/** Ids a row of reasons.csv may use. 'custom' (the borrower's own words) is built in, not a row. */
 const REASONS = ['car', 'medical', 'job', 'other'] as const satisfies readonly Reason[];
+/** Reasons a saved loan may have. */
+const LOAN_REASONS = [...REASONS, 'custom'] as const satisfies readonly Reason[];
 
 function readReasons(files: CsvFiles): ReasonOption[] {
   if (files['reasons.csv'] === undefined) return DEFAULT_REASONS.map((r) => ({ ...r }));
@@ -454,7 +471,8 @@ function readLoans(files: CsvFiles): LoanCase[] {
     return {
       id,
       borrowerId: req(r, 'borrower_id'),
-      reason: oneOf(r, 'reason', REASONS),
+      reason: oneOf(r, 'reason', LOAN_REASONS),
+      ...(opt(r, 'reason_label') ? { reasonLabel: opt(r, 'reason_label') } : {}),
       purpose: r.get('purpose'),
       amount: money(r, 'amount'),
       months: int(r, 'months'),
@@ -586,6 +604,7 @@ export function writeActivity(db: Database): Record<ActivityFile, string> {
       id: l.id,
       borrower_id: l.borrowerId,
       reason: l.reason,
+      reason_label: o(l.reasonLabel),
       purpose: l.purpose,
       amount: fmtMoney(l.amount),
       months: String(l.months),

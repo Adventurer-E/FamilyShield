@@ -75,6 +75,11 @@ export const styles = `
 .fs-stepper { display: flex; align-items: center; justify-content: space-between; }
 .fs-round { width: 48px; height: 48px; border-radius: 24px; border: 1px solid #CBD2DE; background: var(--fs-surface); font-size: 22px; font-weight: 700; cursor: pointer; }
 .fs-round[disabled] { opacity: .4; cursor: not-allowed; }
+.fs-amount { display: inline-flex; align-items: baseline; justify-content: center; font-size: 30px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; }
+.fs-amount-input { width: 5.2ch; border: none; border-bottom: 2px dashed #CBD2DE; background: transparent; font: inherit; color: inherit; text-align: center; padding: 0 2px; }
+.fs-amount-input:focus { outline: none; border-bottom-color: var(--fs-brand); }
+.fs-amount-input[aria-invalid="true"], .fs-term-input[aria-invalid="true"] { border-color: #C23B3B; }
+.fs-term-input { width: 4.5em; padding: 6px 10px; text-align: center; font-weight: 700; resize: none; }
 
 .fs-field { display: flex; flex-direction: column; gap: 6px; }
 .fs-field label { font-size: 15px; font-weight: 800; }

@@ -3,6 +3,7 @@ import type { Rules } from './config';
 import { addMonths, toIsoDate } from './dates';
 import type { IsoTimestamp } from './dates';
 import { invariant } from './errors';
+import { CUSTOM_REASON_MAX } from './reasons';
 import { splitEvenly, sum } from './money';
 import type { Cents } from './money';
 import type { Agreement, Installment, LoanCase, Offer, PersonId, PointsEntry, Reason } from './types';
@@ -16,7 +17,7 @@ import type { Agreement, Installment, LoanCase, Offer, PersonId, PointsEntry, Re
 
 const clone = <T>(value: T): T => structuredClone(value);
 
-const REASONS: readonly Reason[] = ['car', 'medical', 'job', 'other'];
+const REASONS: readonly Reason[] = ['car', 'medical', 'job', 'other', 'custom'];
 
 export interface NewRequest {
   id: string;
@@ -24,6 +25,8 @@ export interface NewRequest {
   /** Circle members to ask. The borrower is never in this list. */
   circle: PersonId[];
   reason: Reason;
+  /** What happened in the borrower's own words; required when reason is 'custom', ignored otherwise. */
+  reasonLabel?: string;
   purpose: string;
   amount: Cents;
   months: number;
@@ -32,24 +35,38 @@ export interface NewRequest {
 
 const dollars = (c: Cents) => `$${(c / 100).toLocaleString('en-US')}`;
 
+/** Any whole-dollar amount from amountMin to amountMax. */
 export function validateAmount(amount: Cents, rules: Rules = DEFAULT_RULES): void {
-  invariant(Number.isInteger(amount), 'INVALID_INPUT', 'Amount must be whole cents.');
+  invariant(Number.isInteger(amount) && amount % 100 === 0, 'INVALID_INPUT', 'Ask for a whole-dollar amount.');
   invariant(
     amount >= rules.amountMin && amount <= rules.amountMax,
     'INVALID_INPUT',
     `Requests must be between ${dollars(rules.amountMin)} and ${dollars(rules.amountMax)}.`,
   );
-  invariant((amount - rules.amountMin) % rules.amountStep === 0, 'INVALID_INPUT', `Requests go in steps of ${dollars(rules.amountStep)}.`);
 }
 
+/** Any whole number of months from termMin to termMax. */
 export function isTerm(months: number, rules: Rules = DEFAULT_RULES): boolean {
-  return rules.terms.includes(months);
+  return Number.isInteger(months) && months >= rules.termMin && months <= rules.termMax;
 }
 
 export function createLoanCase(input: NewRequest, rules: Rules = DEFAULT_RULES): LoanCase {
   validateAmount(input.amount, rules);
-  invariant(isTerm(input.months, rules), 'INVALID_INPUT', `Choose a term of ${rules.terms.join(', ')} months.`);
+  invariant(
+    isTerm(input.months, rules),
+    'INVALID_INPUT',
+    `Choose a repayment term from ${rules.termMin} to ${rules.termMax} months.`,
+  );
   invariant(REASONS.includes(input.reason), 'INVALID_INPUT', 'Choose what happened.');
+  const reasonLabel = input.reason === 'custom' ? (input.reasonLabel ?? '').trim().replace(/\s+/g, ' ') : undefined;
+  if (reasonLabel !== undefined) {
+    invariant(reasonLabel.length > 0, 'INVALID_INPUT', 'Say in a few words what happened.');
+    invariant(
+      reasonLabel.length <= CUSTOM_REASON_MAX,
+      'INVALID_INPUT',
+      `Keep what happened under ${CUSTOM_REASON_MAX} characters; there’s room for details below.`,
+    );
+  }
   const purpose = input.purpose.trim();
   invariant(purpose.length > 0, 'INVALID_INPUT', 'Tell your circle what the money is for.');
   invariant(purpose.length <= 500, 'INVALID_INPUT', 'Keep the description under 500 characters.');
@@ -60,6 +77,7 @@ export function createLoanCase(input: NewRequest, rules: Rules = DEFAULT_RULES):
     id: input.id,
     borrowerId: input.borrowerId,
     reason: input.reason,
+    ...(reasonLabel !== undefined ? { reasonLabel } : {}),
     purpose,
     amount: input.amount,
     months: input.months,

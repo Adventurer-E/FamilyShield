@@ -1,22 +1,16 @@
 import { useState } from 'react';
-import { DEFAULT_REASONS, formatDate, formatMoney, lenderSummary, overdueOf, takenFrom } from '@familyshield/core';
+import { formatDate, formatMoney, lenderSummary, overdueOf, reasonLabelOf, takenFrom } from '@familyshield/core';
 import type { LoanCase } from '@familyshield/core';
 import { useFs } from '../context';
 import { Avatar, Button, Notice, Progress, Screen } from '../kit';
 import { CheckIcon } from '../icons';
 import { AgreementDoc } from './Agreement';
 
-/**
- * The label for why someone asked: the same as the borrower's "What happened?" chips (data/reasons.csv).
- * Falls back to the built-in label if that reason was since removed from the file.
- */
-export function reasonLabel(reasons: ReadonlyArray<{ id: string; label: string }>, reason: LoanCase['reason']): string {
-  return reasons.find((r) => r.id === reason)?.label ?? DEFAULT_REASONS.find((r) => r.id === reason)?.label ?? reason;
-}
-
 function RequestSummary({ loan }: { loan: LoanCase }) {
   const { nameOf, fullNameOf, data } = useFs();
-  const reason = reasonLabel(data.config.reasons, loan.reason);
+  // Same labels as the borrower's "What happened?" chips (data/reasons.csv),
+  // or the borrower's own words when they wrote their own reason.
+  const reason = reasonLabelOf(loan, data.config.reasons);
   return (
     <section className="fs-card">
       <div className="fs-row">

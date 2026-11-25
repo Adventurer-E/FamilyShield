@@ -1,10 +1,9 @@
-import { formatDate, formatMoney, lenderHome } from '@familyshield/core';
+import { formatDate, formatMoney, lenderHome, reasonLabelOf } from '@familyshield/core';
 import type { LenderAgreementItem, LenderOfferItem, LoanCase } from '@familyshield/core';
 import { useFs } from '../context';
 import { Avatar, Progress, Screen } from '../kit';
 import { ChevronIcon } from '../icons';
 import { PilotSignup, RoleSwitch, TrustedCircle } from './Home';
-import { reasonLabel } from './Lender';
 
 type Pill = { text: string; tone: '' | 'brand' | 'solid' | 'warn' };
 
@@ -40,7 +39,7 @@ function RequestsList({ loans }: { loans: LoanCase[] }) {
             key={loan.id}
             personId={loan.borrowerId}
             title={`${nameOf(loan.borrowerId)} · ${formatMoney(loan.amount)}`}
-            detail={`${reasonLabel(data.config.reasons, loan.reason)} · over ${loan.months} months, interest-free`}
+            detail={`${reasonLabelOf(loan, data.config.reasons)} · over ${loan.months} months, interest-free`}
             pill={{ text: 'Reply', tone: 'solid' }}
             onClick={() => go({ name: 'respond', loanId: loan.id })}
           />
