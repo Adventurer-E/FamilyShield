@@ -338,11 +338,12 @@ export class FamilyShieldService {
     return mine.at(-1) ?? null;
   }
 
+  /** Every request I was asked on, cancelled ones included, so the lender home can say what happened. */
   incoming(userId: string): LoanCase[] {
     const db = this.open();
     this.user(db, userId);
     return db.loans
-      .filter((l) => l.status !== 'cancelled' && l.borrowerId !== userId && l.offers.some((o) => o.memberId === userId))
+      .filter((l) => l.borrowerId !== userId && l.offers.some((o) => o.memberId === userId))
       .map((l) => redactForLender(l, userId))
       .reverse();
   }

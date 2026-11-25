@@ -6,14 +6,17 @@ import { Avatar, Button, Notice, Progress, Screen } from '../kit';
 import { CheckIcon } from '../icons';
 import { AgreementDoc } from './Agreement';
 
+/**
+ * The label for why someone asked: the same as the borrower's "What happened?" chips (data/reasons.csv).
+ * Falls back to the built-in label if that reason was since removed from the file.
+ */
+export function reasonLabel(reasons: ReadonlyArray<{ id: string; label: string }>, reason: LoanCase['reason']): string {
+  return reasons.find((r) => r.id === reason)?.label ?? DEFAULT_REASONS.find((r) => r.id === reason)?.label ?? reason;
+}
+
 function RequestSummary({ loan }: { loan: LoanCase }) {
   const { nameOf, fullNameOf, data } = useFs();
-  // Same labels as the borrower's "What happened?" chips (data/reasons.csv).
-  // Falls back to the built-in label if that reason was since removed from the file.
-  const reasonLabel =
-    data.config.reasons.find((r) => r.id === loan.reason)?.label ??
-    DEFAULT_REASONS.find((r) => r.id === loan.reason)?.label ??
-    loan.reason;
+  const reason = reasonLabel(data.config.reasons, loan.reason);
   return (
     <section className="fs-card">
       <div className="fs-row">
@@ -22,7 +25,7 @@ function RequestSummary({ loan }: { loan: LoanCase }) {
           <div style={{ fontWeight: 800 }}>{fullNameOf(loan.borrowerId)}</div>
           <div className="fs-small fs-muted">Asked their circle for support</div>
         </div>
-        <span className="fs-pill warn">{reasonLabel}</span>
+        <span className="fs-pill warn">{reason}</span>
       </div>
       <div className="fs-big">{formatMoney(loan.amount)}</div>
       <p className="fs-small" style={{ margin: 0, color: '#3B4659' }}>{loan.purpose}</p>
@@ -50,7 +53,9 @@ export function Respond({ loan }: { loan: LoanCase }) {
       <RequestSummary loan={loan} />
       <Notice>Your answer is private. {who} sees it, but no one else in the family does, and “not this time” is always fine.</Notice>
 
-      {loan.status !== 'collecting' && mine?.status === 'pending' ? (
+      {loan.status === 'cancelled' ? (
+        <Notice kind="info">{who} cancelled this request. Nothing was signed and no money moved.</Notice>
+      ) : loan.status !== 'collecting' && mine?.status === 'pending' ? (
         <Notice kind="info">This request has closed.</Notice>
       ) : null}
 
@@ -88,7 +93,7 @@ export function Respond({ loan }: { loan: LoanCase }) {
         </>
       ) : null}
 
-      {mine && mine.status !== 'pending' ? (
+      {mine && mine.status !== 'pending' && loan.status !== 'cancelled' ? (
         <section className="fs-card soft">
           <div className="fs-row">
             <span className="fs-avatar" style={{ background: 'var(--fs-brand)', color: '#fff', border: 'none', width: 32, height: 32 }}>

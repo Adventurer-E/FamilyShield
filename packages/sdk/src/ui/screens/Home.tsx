@@ -1,4 +1,4 @@
-import { formatDate, formatMoney, lenderSummary, nextInstallment, repaymentSummary } from '@familyshield/core';
+import { formatDate, formatMoney, nextInstallment, repaymentSummary } from '@familyshield/core';
 import type { LoanCase } from '@familyshield/core';
 import { lenderNeedsAction, useFs } from '../context';
 import type { Role, Route } from '../context';
@@ -60,31 +60,6 @@ function MyLoanCard({ loan }: { loan: LoanCase }) {
   );
 }
 
-/** One line per request I was asked about, with what (if anything) I need to do. */
-function incomingStatus(loan: LoanCase, meId: string): { text: string; action: boolean; route: Route } {
-  const mine = loan.offers[0];
-  const agreement = loan.agreements.find((a) => a.lenderId === meId);
-  const respond: Route = { name: 'respond', loanId: loan.id };
-  const lender: Route = { name: 'lender', loanId: loan.id };
-  if (loan.status === 'collecting') {
-    if (mine?.status === 'pending') return { text: 'Asked for your help', action: true, route: respond };
-    if (mine?.status === 'offered') return { text: `You offered ${formatMoney(mine.amount)}`, action: false, route: respond };
-    return { text: 'You replied privately', action: false, route: respond };
-  }
-  if (!agreement) return { text: 'Funded by others in the family', action: false, route: respond };
-  if (loan.status === 'signing') {
-    return agreement.lenderSignedAt
-      ? { text: 'Signed · waiting on others', action: false, route: lender }
-      : { text: 'Agreement ready to sign', action: true, route: lender };
-  }
-  if (loan.pause?.status === 'pending' && loan.pause.approvals[meId] === null) {
-    return { text: 'Asked to pause a month', action: true, route: lender };
-  }
-  const ls = lenderSummary(loan, meId);
-  if (loan.status === 'repaid') return { text: `Repaid you ${formatMoney(ls.received)} in full`, action: false, route: lender };
-  return { text: `Repaying you · ${formatMoney(ls.received)} of ${formatMoney(ls.lent)}`, action: false, route: lender };
-}
-
 /** Borrower / lender toggle shown at the top of both homes. */
 export function RoleSwitch() {
   const { role, switchRole, data } = useFs();
@@ -113,7 +88,7 @@ export function RoleSwitch() {
 }
 
 /** Summary of my circle on both homes; opens the circle screen (B3). */
-function TrustedCircle() {
+export function TrustedCircle() {
   const { data, go } = useFs();
   const { circle } = data.profile;
   return (
@@ -145,7 +120,7 @@ function TrustedCircle() {
  * (the waitlist form, or a click-counting short link to it) in a new tab.
  * Hidden when the setting is blank.
  */
-function PilotSignup() {
+export function PilotSignup() {
   const url = useFs().data.config.rules.pilotSignupUrl;
   if (!url) return null;
   return (
@@ -228,49 +203,6 @@ export function BorrowerHome() {
           </div>
         </section>
       ) : null}
-
-      <TrustedCircle />
-      <PilotSignup />
-    </Screen>
-  );
-}
-
-/**
- * Lender home. Placeholder content reused from the old shared hub;
- * the real layout is ticket B2 (#28).
- */
-export function LenderHome() {
-  const { data, go, nameOf } = useFs();
-  const { incoming, profile } = data;
-
-  return (
-    <Screen title="FamilyShield" eyebrow={profile.account.label} root>
-      <RoleSwitch />
-      <h2 className="fs-section-title">Your family’s requests</h2>
-      {incoming.length > 0 ? (
-        <div className="fs-card flush">
-          {incoming.map((loan) => {
-            const st = incomingStatus(loan, profile.me.id);
-            return (
-              <button key={loan.id} type="button" className="fs-list-btn" onClick={() => go(st.route)}>
-                <Avatar id={loan.borrowerId} />
-                <span className="fs-grow">
-                  <span style={{ display: 'block', fontWeight: 800 }}>
-                    {nameOf(loan.borrowerId)} · {formatMoney(loan.amount)}
-                  </span>
-                  <span className="fs-small fs-muted">{st.text}</span>
-                </span>
-                {st.action ? <span className="fs-pill solid">Action</span> : null}
-                <ChevronIcon size={18} stroke="#5A6478" />
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <section className="fs-card">
-          <div className="fs-small fs-muted">No one in your family has asked for help right now. When they do, their request shows up here.</div>
-        </section>
-      )}
 
       <TrustedCircle />
       <PilotSignup />
