@@ -2,66 +2,48 @@ import { useState } from 'react';
 import { acceptedTotal, formatMoney, takenFrom } from '@familyshield/core';
 import type { LoanCase, Offer } from '@familyshield/core';
 import { useFs } from '../context';
-import { Avatar, Button, Notice, Screen } from '../kit';
+import { Avatar, Button, DollarInput, Notice, Screen } from '../kit';
 
 /**
- * Accept an offer, or part of it (B5). Accepting takes as much of it as the request still
- * needs, so two $1,000 offers on a $1,500 request become $1,000 + $500; the amount can then
- * be changed (e.g. $750 + $750). Each amount is at most the offer; the total at most the request.
+ * How much to take from one offer (B5): the borrower types it straight away, $0 = not taking it.
+ * "Take $1,000" fills in as much of the offer as the request still needs, so two $1,000 offers
+ * on a $1,500 request can be $1,000 + $500, or typed as $750 + $750. Each amount is at most
+ * the offer, and the total at most the request (the rules refuse anything else).
  */
 function TakeOffer({ loan, offer }: { loan: LoanCase; offer: Offer }) {
   const { api, run, nameOf } = useFs();
   const taken = takenFrom(offer);
-  const stillNeeded = Math.max(0, loan.amount - acceptedTotal(loan) + taken);
-  const [draft, setDraft] = useState(String(taken / 100));
+  const most = Math.min(offer.amount, Math.max(0, loan.amount - acceptedTotal(loan) + taken));
+  const [draft, setDraft] = useState(taken);
   const who = nameOf(offer.memberId);
-  const inputId = `fs-take-${offer.memberId}`;
+  const id = `fs-take-${offer.memberId}`;
 
-  const setTaken = (amount: number) => run(() => api.setOfferTaken(loan.id, offer.memberId, amount));
-  const commit = () => {
-    const dollars = Math.round(Number(draft));
-    if (!Number.isFinite(dollars) || dollars * 100 === taken) return setDraft(String(taken / 100));
-    // If it's refused (more than the offer or the request), the error shows and the field goes back.
-    return setTaken(Math.max(0, dollars) * 100).then((ok) => ok || setDraft(String(taken / 100)));
+  const save = (cents: number) => {
+    setDraft(cents);
+    if (cents === taken) return;
+    // If it's refused (more than the offer or the request), the error shows and the box goes back.
+    void run(() => api.setOfferTaken(loan.id, offer.memberId, cents)).then((ok) => ok || setDraft(taken));
   };
 
-  if (!taken) {
-    const take = Math.min(offer.amount, stillNeeded);
-    return (
-      <Button variant="secondary" disabled={take === 0} onClick={() => setTaken(take)}>
-        {take === 0 ? 'Your request is covered' : take < offer.amount ? `Accept ${formatMoney(take)} of ${formatMoney(offer.amount)}` : `Accept ${formatMoney(offer.amount)}`}
-      </Button>
-    );
-  }
   return (
-    <div className="fs-stack" style={{ gap: 8 }}>
-      <div className="fs-field">
-        <label htmlFor={inputId}>
-          Take from {who} <span className="fs-small fs-muted" style={{ fontWeight: 600 }}>· up to {formatMoney(Math.min(offer.amount, stillNeeded))}</span>
-        </label>
-        <div className="fs-row">
-          <span style={{ fontWeight: 800 }} aria-hidden="true">$</span>
-          <input
-            id={inputId}
-            className="fs-input"
-            type="number"
-            inputMode="numeric"
-            min={0}
-            max={Math.min(offer.amount, stillNeeded) / 100}
-            step={1}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => e.key === 'Enter' && commit()}
-          />
-        </div>
+    <div className="fs-field">
+      <label htmlFor={id}>How much to take from {who}</label>
+      <div className="fs-row">
+        <span className="fs-grow">
+          <DollarInput id={id} value={draft} invalid={draft > most} describedBy={`${id}-help`} onChange={setDraft} onCommit={() => save(draft)} />
+        </span>
+        {most > 0 && draft !== most ? (
+          <button type="button" className="fs-chip" onClick={() => save(most)}>
+            Take {formatMoney(most)}
+          </button>
+        ) : null}
       </div>
-      {taken < offer.amount ? (
-        <p className="fs-tiny fs-muted" style={{ margin: 0 }}>
-          {who} offered {formatMoney(offer.amount)}. They’ll see you’re taking {formatMoney(taken)} before they sign.
-        </p>
-      ) : null}
-      <Button variant="ghost" small onClick={() => setTaken(0)}>Don’t take this offer</Button>
+      <p id={`${id}-help`} className="fs-tiny fs-muted" style={{ margin: 0, color: draft > most ? '#8A1C1C' : undefined }}>
+        {most === 0 && taken === 0
+          ? 'Your request is already covered. Lower another amount to take some of this offer.'
+          : `Up to ${formatMoney(most)} · $0 means you’re not taking it.`}
+        {taken > 0 && taken < offer.amount ? ` ${who} will see you’re taking ${formatMoney(taken)} of ${formatMoney(offer.amount)} before they sign.` : ''}
+      </p>
     </div>
   );
 }

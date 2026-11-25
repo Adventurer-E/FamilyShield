@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { formatDate, formatMoney, lenderSummary, overdueOf, reasonLabelOf, takenFrom } from '@familyshield/core';
 import type { LoanCase } from '@familyshield/core';
 import { useFs } from '../context';
-import { Avatar, Button, Notice, Progress, Screen } from '../kit';
+import { Avatar, Button, DollarInput, Notice, Progress, Screen } from '../kit';
 import { CheckIcon } from '../icons';
 import { AgreementDoc } from './Agreement';
 
@@ -41,6 +41,8 @@ export function Respond({ loan }: { loan: LoanCase }) {
   const [amount, setAmount] = useState(presets[presets.length - 1] ?? loan.amount);
   const [note, setNote] = useState('');
   const who = nameOf(loan.borrowerId);
+  // Same rule as respondToRequest: a whole-dollar amount from $1 up to the request.
+  const amountOk = amount >= 100 && amount <= loan.amount;
 
   return (
     <Screen title={`A request from ${who}`}>
@@ -77,12 +79,22 @@ export function Respond({ loan }: { loan: LoanCase }) {
               </button>
             ) : null}
           </fieldset>
+          {/* Or any whole-dollar amount up to the request; the chips above are shortcuts. */}
+          <div className="fs-field">
+            <label htmlFor="fs-offer-amount">Or type an amount</label>
+            <DollarInput id="fs-offer-amount" value={amount} invalid={!amountOk} describedBy="fs-offer-amount-help" onChange={setAmount} />
+            <span id="fs-offer-amount-help" className="fs-tiny fs-muted" style={{ color: amountOk ? undefined : '#8A1C1C' }}>
+              Any whole-dollar amount up to the {formatMoney(loan.amount)} {who} asked for
+            </span>
+          </div>
           <div className="fs-field">
             <label htmlFor="fs-note">A note for {who} <span className="fs-small fs-muted" style={{ fontWeight: 600 }}>· optional</span></label>
             <textarea id="fs-note" className="fs-input" rows={2} maxLength={280} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Happy to help. Take the time you need." />
           </div>
           <p className="fs-tiny fs-muted" style={{ margin: 0 }}>Interest-free. You’ll both sign the terms before any money moves.</p>
-          <Button onClick={() => run(() => api.respond(loan.id, { kind: 'offer', amount, note }))}>Offer {formatMoney(amount)} privately</Button>
+          <Button disabled={!amountOk} onClick={() => run(() => api.respond(loan.id, { kind: 'offer', amount, note }))}>
+            {amountOk ? `Offer ${formatMoney(amount)} privately` : 'Choose an amount to offer'}
+          </Button>
           <Button variant="secondary" onClick={() => run(() => api.respond(loan.id, { kind: 'decline', note }))}>Not this time</Button>
         </>
       ) : null}

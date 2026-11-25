@@ -79,6 +79,41 @@ export function Button(props: {
   );
 }
 
+/**
+ * A box for a whole-dollar amount, like the request amount (B4): digits only, shown with
+ * thousands separators, empty = $0. `value` and `onChange` are in cents. `onCommit` runs when
+ * the person leaves the box or presses Enter.
+ */
+export function DollarInput(props: {
+  id: string;
+  value: number;
+  onChange(cents: number): void;
+  onCommit?(): void;
+  invalid?: boolean;
+  describedBy?: string;
+}) {
+  return (
+    <div className="fs-row" style={{ gap: 6 }}>
+      <span style={{ fontWeight: 800 }} aria-hidden="true">$</span>
+      <input
+        id={props.id}
+        className="fs-input"
+        inputMode="numeric"
+        autoComplete="off"
+        placeholder="0"
+        value={props.value > 0 ? (props.value / 100).toLocaleString('en-US') : ''}
+        aria-invalid={props.invalid || undefined}
+        aria-describedby={props.describedBy}
+        onChange={(e) => props.onChange(Number(e.target.value.replace(/\D/g, '').slice(0, 7) || '0') * 100)}
+        onBlur={() => props.onCommit?.()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') props.onCommit?.();
+        }}
+      />
+    </div>
+  );
+}
+
 export function Notice({ children, kind = 'privacy' }: { children: ReactNode; kind?: 'privacy' | 'info' }) {
   return (
     <div className="fs-notice">
