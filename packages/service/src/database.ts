@@ -120,7 +120,7 @@ export const ACTIVITY_TABLES = {
   // Accounts created when someone adds an email or phone that nobody in people.csv has.
   'new_people.csv': ['id', 'first_name', 'last_name', 'email', 'phone', 'created_by', 'created_at'],
   'loans.csv': ['id', 'borrower_id', 'reason', 'purpose', 'amount', 'months', 'status', 'created_at', 'funded_at', 'repaid_at', 'points', 'pauses_used'],
-  'offers.csv': ['loan_id', 'member_id', 'status', 'amount', 'accepted', 'note', 'responded_at'],
+  'offers.csv': ['loan_id', 'member_id', 'status', 'amount', 'accepted', 'taken', 'note', 'responded_at'],
   'agreements.csv': ['loan_id', 'lender_id', 'principal', 'interest_rate_percent', 'fee', 'total', 'borrower_signed_at', 'lender_signed_at'],
   'installments.csv': ['loan_id', 'number', 'due_date', 'amount', 'paid_at', 'on_time'],
   'installment_splits.csv': ['loan_id', 'number', 'pays_to', 'amount'],
@@ -470,6 +470,8 @@ function readLoans(files: CsvFiles): LoanCase[] {
           status: oneOf(o, 'status', OFFER_STATUSES),
           amount: money(o, 'amount', 0),
           accepted: bool(o, 'accepted', false),
+          // Blank (older files) = the whole offer.
+          ...(opt(o, 'taken') ? { taken: money(o, 'taken') } : {}),
           note: opt(o, 'note'),
           respondedAt: opt(o, 'responded_at'),
         }),
@@ -601,6 +603,7 @@ export function writeActivity(db: Database): Record<ActivityFile, string> {
         status: offer.status,
         amount: fmtMoney(offer.amount),
         accepted: fmtBool(offer.accepted),
+        taken: offer.accepted && offer.taken !== undefined ? fmtMoney(offer.taken) : '',
         note: o(offer.note),
         responded_at: o(offer.respondedAt),
       });

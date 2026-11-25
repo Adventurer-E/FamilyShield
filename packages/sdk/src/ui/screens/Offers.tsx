@@ -1,7 +1,70 @@
-import { acceptedTotal, formatMoney } from '@familyshield/core';
-import type { LoanCase } from '@familyshield/core';
+import { useState } from 'react';
+import { acceptedTotal, formatMoney, takenFrom } from '@familyshield/core';
+import type { LoanCase, Offer } from '@familyshield/core';
 import { useFs } from '../context';
 import { Avatar, Button, Notice, Screen } from '../kit';
+
+/**
+ * Accept an offer, or part of it (B5). Accepting takes as much of it as the request still
+ * needs, so two $1,000 offers on a $1,500 request become $1,000 + $500; the amount can then
+ * be changed (e.g. $750 + $750). Each amount is at most the offer; the total at most the request.
+ */
+function TakeOffer({ loan, offer }: { loan: LoanCase; offer: Offer }) {
+  const { api, run, nameOf } = useFs();
+  const taken = takenFrom(offer);
+  const stillNeeded = Math.max(0, loan.amount - acceptedTotal(loan) + taken);
+  const [draft, setDraft] = useState(String(taken / 100));
+  const who = nameOf(offer.memberId);
+  const inputId = `fs-take-${offer.memberId}`;
+
+  const setTaken = (amount: number) => run(() => api.setOfferTaken(loan.id, offer.memberId, amount));
+  const commit = () => {
+    const dollars = Math.round(Number(draft));
+    if (!Number.isFinite(dollars) || dollars * 100 === taken) return setDraft(String(taken / 100));
+    // If it's refused (more than the offer or the request), the error shows and the field goes back.
+    return setTaken(Math.max(0, dollars) * 100).then((ok) => ok || setDraft(String(taken / 100)));
+  };
+
+  if (!taken) {
+    const take = Math.min(offer.amount, stillNeeded);
+    return (
+      <Button variant="secondary" disabled={take === 0} onClick={() => setTaken(take)}>
+        {take === 0 ? 'Your request is covered' : take < offer.amount ? `Accept ${formatMoney(take)} of ${formatMoney(offer.amount)}` : `Accept ${formatMoney(offer.amount)}`}
+      </Button>
+    );
+  }
+  return (
+    <div className="fs-stack" style={{ gap: 8 }}>
+      <div className="fs-field">
+        <label htmlFor={inputId}>
+          Take from {who} <span className="fs-small fs-muted" style={{ fontWeight: 600 }}>· up to {formatMoney(Math.min(offer.amount, stillNeeded))}</span>
+        </label>
+        <div className="fs-row">
+          <span style={{ fontWeight: 800 }} aria-hidden="true">$</span>
+          <input
+            id={inputId}
+            className="fs-input"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={Math.min(offer.amount, stillNeeded) / 100}
+            step={1}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => e.key === 'Enter' && commit()}
+          />
+        </div>
+      </div>
+      {taken < offer.amount ? (
+        <p className="fs-tiny fs-muted" style={{ margin: 0 }}>
+          {who} offered {formatMoney(offer.amount)}. They’ll see you’re taking {formatMoney(taken)} before they sign.
+        </p>
+      ) : null}
+      <Button variant="ghost" small onClick={() => setTaken(0)}>Don’t take this offer</Button>
+    </div>
+  );
+}
 
 export function Offers({ loan }: { loan: LoanCase }) {
   const { api, run, go, goHome, nameOf } = useFs();
@@ -39,15 +102,8 @@ export function Offers({ loan }: { loan: LoanCase }) {
               {offer.status === 'pending' ? <span className="fs-dot" aria-hidden="true" /> : null}
             </div>
             {offer.note ? <div className="fs-quote">“{offer.note}”</div> : null}
-            {offer.status === 'offered' ? (
-              <Button
-                variant="secondary"
-                pressed={offer.accepted}
-                onClick={() => run(() => api.setOfferAccepted(loan.id, offer.memberId, !offer.accepted))}
-              >
-                {offer.accepted ? 'Accepted ✓' : `Accept ${formatMoney(offer.amount)}`}
-              </Button>
-            ) : null}
+            {/* Keyed by the amount taken, so the field resets whenever the saved amount changes. */}
+            {offer.status === 'offered' ? <TakeOffer key={`${offer.memberId}:${takenFrom(offer)}`} loan={loan} offer={offer} /> : null}
           </li>
         ))}
       </ul>
@@ -60,7 +116,7 @@ export function Offers({ loan }: { loan: LoanCase }) {
       ) : null}
 
       <div className="fs-between" style={{ padding: '4px 2px 0' }}>
-        <span className="fs-small" style={{ fontWeight: 600 }}>Accepted</span>
+        <span className="fs-small" style={{ fontWeight: 600 }}>Taking</span>
         <span style={{ fontWeight: 800 }}>
           {formatMoney(accepted)} <span className="fs-small fs-muted" style={{ fontWeight: 600 }}>of {formatMoney(loan.amount)}</span>
         </span>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DEFAULT_REASONS, formatDate, formatMoney, lenderSummary, overdueOf } from '@familyshield/core';
+import { DEFAULT_REASONS, formatDate, formatMoney, lenderSummary, overdueOf, takenFrom } from '@familyshield/core';
 import type { LoanCase } from '@familyshield/core';
 import { useFs } from '../context';
 import { Avatar, Button, Notice, Progress, Screen } from '../kit';
@@ -106,7 +106,11 @@ export function Respond({ loan }: { loan: LoanCase }) {
           <p className="fs-small" style={{ margin: 0, color: '#3B4659' }}>
             {mine.status === 'offered'
               ? loan.status === 'collecting'
-                ? `${who} will see your offer. If they accept, you’ll both review and e-sign the terms before any money moves.`
+                ? mine.accepted && takenFrom(mine) < mine.amount
+                  ? `${who} accepted ${formatMoney(takenFrom(mine))} of it. You’ll both review and e-sign the terms for ${formatMoney(takenFrom(mine))} before any money moves.`
+                  : mine.accepted
+                    ? `${who} accepted your offer. You’ll both review and e-sign the terms before any money moves.`
+                    : `${who} will see your offer. If they accept, you’ll both review and e-sign the terms before any money moves.`
                 : `${who} didn’t take this offer, and nothing was signed. Thank you for offering.`
               : mine.status === 'declined'
                 ? `${who} sees “not this time”. No reason needed, and nobody else in the family will know.`
@@ -125,6 +129,8 @@ export function LenderLoan({ loan }: { loan: LoanCase }) {
   const ls = lenderSummary(loan, me);
   const who = nameOf(loan.borrowerId);
   if (!ls.agreement) return <Respond loan={loan} />;
+  // What I offered: more than I lend when the borrower took only part of it (B5).
+  const offered = loan.offers.find((o) => o.memberId === me)?.amount ?? ls.lent;
   const nextMine = loan.schedule.find((i) => !i.paidAt);
   // A payment to me that hasn't arrived (C2). The amounts here are my share only.
   const late = overdueOf(loan, data.eligibility.today, data.config.rules);
@@ -133,6 +139,11 @@ export function LenderLoan({ loan }: { loan: LoanCase }) {
     <Screen title={`Your loan to ${who}`}>
       {loan.status === 'signing' ? (
         <>
+          {offered > ls.lent ? (
+            <Notice kind="info">
+              {who} accepted {formatMoney(ls.lent)} of your {formatMoney(offered)} offer, so this agreement is for {formatMoney(ls.lent)}. You lend {formatMoney(ls.lent)}, not {formatMoney(offered)}.
+            </Notice>
+          ) : null}
           <AgreementDoc agreement={ls.agreement} months={loan.months} borrowerId={loan.borrowerId} />
           <Notice kind="info">
             The {+((ls.agreement.fee / ls.agreement.principal) * 100).toFixed(2)}% service fee is paid by {who} to FamilyShield. You get back exactly the {formatMoney(ls.lent)} you lend.

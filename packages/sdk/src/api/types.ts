@@ -1,4 +1,4 @@
-import type { AppConfig, CreateRequestInput, Eligibility, LenderResponse, LoanCase, Person, Profile } from '@familyshield/core';
+import type { AppConfig, Cents, CreateRequestInput, Eligibility, LenderResponse, LoanCase, Person, Profile } from '@familyshield/core';
 
 export type { AppConfig, CreateRequestInput, Eligibility, Profile };
 
@@ -32,6 +32,8 @@ export interface FamilyShieldApi {
   createRequest(input: CreateRequestInput): Promise<LoanCase>;
   cancelRequest(loanId: string): Promise<LoanCase>;
   setOfferAccepted(loanId: string, memberId: string, accepted: boolean): Promise<LoanCase>;
+  /** Take this much of one offer, in cents; 0 = not taking it. Lets offers that add up to more than the request be combined. */
+  setOfferTaken(loanId: string, memberId: string, amount: Cents): Promise<LoanCase>;
   signAsBorrower(loanId: string): Promise<LoanCase>;
   makePayment(loanId: string): Promise<LoanCase>;
   requestPause(loanId: string): Promise<LoanCase>;

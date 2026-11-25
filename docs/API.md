@@ -81,12 +81,26 @@ Rules:
 | --- | --- | --- |
 | `POST /loans` | `{ reason, purpose, amount, months }` | `createLoanCase`; fails with `NOT_ELIGIBLE` if the caller may not start a request (below) |
 | `POST /loans/:id/cancel` | — | `cancelRequest` |
-| `POST /loans/:id/offers/:memberId/acceptance` | `{ accepted: boolean }` | `setOfferAccepted` |
+| `POST /loans/:id/offers/:memberId/acceptance` | `{ amount }` or `{ accepted: boolean }` | `setOfferTaken`: take `amount` cents of that offer (0 = not taking it). `{ accepted }` takes all or none of it (`setOfferAccepted`). See “Taking part of an offer” below |
 | `POST /loans/:id/sign` | — | `signAsBorrower` |
 | `POST /loans/:id/payments` | — | `recordPayment`: collects the next installment via the bank |
 | `POST /loans/:id/pause` | — | `requestPause` |
 | `POST /loans/:id/pause/cancel` | — | `cancelPause` |
 | `POST /loans/:id/rewards/:rewardId/claim` | — | `claimReward`: the service gets a code from the partner |
+
+#### Taking part of an offer
+
+The borrower chooses how much to take from each offer, so offers that add up
+to more than the request can be combined: on a $1,500 request with two $1,000
+offers, Alex can take $750 from each. Each amount is in whole dollars and at
+most that offer, and everything taken is at most the request; otherwise the
+call fails with `INVALID_INPUT`. The amount is stored on the offer as `taken`
+(read it with `takenFrom(offer)`: 0 unless accepted, and the whole offer when
+`taken` is missing). `acceptedTotal`, the agreements, the fee and the schedule
+all use it, so the lender signs for the amount taken. No money moves before
+everyone signs, so nothing needs to be returned. The lender sees what was
+taken on their own offer (`taken`) and, after the borrower signs, on their
+agreement (`principal` is less than their offer's `amount`).
 
 #### Who may start a request
 

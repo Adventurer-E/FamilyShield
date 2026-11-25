@@ -55,7 +55,9 @@ function offerText(item: LenderOfferItem, who: string): { detail: string; pill: 
     case 'waiting':
       return { detail: `Waiting for ${who} to choose`, pill: { text: 'Offered', tone: 'brand' } };
     case 'accepted':
-      return { detail: `${who} accepted · you’ll both sign the terms next`, pill: { text: 'Accepted', tone: 'brand' } };
+      return item.taken < item.offer.amount
+        ? { detail: `${who} accepted ${formatMoney(item.taken)} of your ${formatMoney(item.offer.amount)} offer · you’ll both sign the terms next`, pill: { text: 'Accepted', tone: 'brand' } }
+        : { detail: `${who} accepted · you’ll both sign the terms next`, pill: { text: 'Accepted', tone: 'brand' } };
     case 'not-taken':
       return { detail: `${who} went ahead without it · nothing was signed`, pill: { text: 'Not taken', tone: '' } };
     case 'declined':
@@ -100,7 +102,10 @@ function agreementText(item: LenderAgreementItem, who: string): { detail: string
   if (item.action === 'pause') return { detail: `${who} asked to pause one month`, pill: { text: 'Answer', tone: 'solid' } };
   switch (item.state) {
     case 'to-sign':
-      return { detail: 'Agreement ready for your signature', pill: { text: 'Sign', tone: 'solid' } };
+      return {
+        detail: item.offered > item.lent ? `${who} accepted ${formatMoney(item.lent)} of your ${formatMoney(item.offered)} offer · ready for your signature` : 'Agreement ready for your signature',
+        pill: { text: 'Sign', tone: 'solid' },
+      };
     case 'signed':
       return { detail: 'You signed · the money moves once everyone signs', pill: { text: 'Signed', tone: '' } };
     case 'late':

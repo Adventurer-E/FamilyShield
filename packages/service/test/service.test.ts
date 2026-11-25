@@ -310,6 +310,26 @@ describe('the trusted circle', () => {
     expect(svc.incoming('mom')[0]!.offers).toEqual([expect.objectContaining({ memberId: 'mom', status: 'expired' })]);
   });
 
+  it('combines two offers by taking part of each, stores it and moves only what was taken (B5)', () => {
+    const { svc, storage } = setup();
+    const loan = svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 150_000, months: 10 });
+    svc.respond('maya', loan.id, { kind: 'offer', amount: 100_000 });
+    svc.respond('mom', loan.id, { kind: 'offer', amount: 100_000 });
+    svc.setOfferTaken('alex', loan.id, 'maya', 75_000);
+    svc.setOfferTaken('alex', loan.id, 'mom', 75_000);
+    expect(storage.read()['offers.csv']).toMatch(/maya,offered,1000\.00,yes,750\.00/);
+    // Maya sees her own offer and how much of it Alex is taking.
+    expect(svc.incoming('maya')[0]!.offers).toMatchObject([{ memberId: 'maya', amount: 100_000, accepted: true, taken: 75_000 }]);
+
+    const mayaBefore = svc.account('maya').balance;
+    svc.signAsBorrower('alex', loan.id);
+    expect(svc.incoming('maya')[0]!.agreements).toMatchObject([{ lenderId: 'maya', principal: 75_000 }]);
+    svc.signAsLender('maya', loan.id);
+    svc.signAsLender('mom', loan.id);
+    expect(svc.myLoan('alex')!.status).toBe('active');
+    expect(svc.account('maya').balance).toBe(mayaBefore - 75_000);
+  });
+
   it('still shows a cancelled request to everyone who was asked, so they know what happened', () => {
     const { svc } = setup();
     const loan = svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 150_000, months: 10 });

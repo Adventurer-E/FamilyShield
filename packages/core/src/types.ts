@@ -22,6 +22,11 @@ export interface Offer {
   amount: Cents;
   note?: string;
   accepted: boolean;
+  /**
+   * How much of this offer the borrower takes, when `accepted` (B5): at most `amount`.
+   * Missing means the whole offer. Use `takenFrom(offer)` rather than reading it directly.
+   */
+  taken?: Cents;
   respondedAt?: IsoTimestamp;
 }
 

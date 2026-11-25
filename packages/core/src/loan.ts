@@ -111,13 +111,34 @@ export function respondToRequest(loan: LoanCase, memberId: PersonId, response: L
   return next;
 }
 
-/** The borrower picks which offers to take. */
+/** How much the borrower takes from this offer: 0 unless it was made and accepted. */
+export function takenFrom(offer: Offer): Cents {
+  if (offer.status !== 'offered' || !offer.accepted) return 0;
+  return Math.min(offer.taken ?? offer.amount, offer.amount);
+}
+
+/** The borrower takes the whole offer, or none of it. */
 export function setOfferAccepted(loan: LoanCase, memberId: PersonId, accepted: boolean): LoanCase {
+  const offer = loan.offers.find((o) => o.memberId === memberId);
+  return setOfferTaken(loan, memberId, accepted && offer ? offer.amount : 0);
+}
+
+/**
+ * The borrower chooses how much to take from one offer (B5), so offers that add up
+ * to more than the request can be combined: $750 from Maya and $750 from Grace.
+ * 0 means not taking it. Each amount is at most that offer, in whole dollars, and
+ * everything taken is at most the request. The agreement is drawn up for this amount.
+ */
+export function setOfferTaken(loan: LoanCase, memberId: PersonId, amount: Cents): LoanCase {
   invariant(loan.status === 'collecting', 'INVALID_STATE', 'Offers can only be changed before you sign.');
+  invariant(Number.isInteger(amount) && amount >= 0 && amount % 100 === 0, 'INVALID_INPUT', 'Choose a whole-dollar amount of $0 or more.');
   const next = clone(loan);
   const offer = findOffer(next, memberId);
   invariant(offer.status === 'offered', 'INVALID_STATE', 'Only offers that were made can be accepted.');
-  offer.accepted = accepted;
+  invariant(amount <= offer.amount, 'INVALID_INPUT', `You can take up to the ${dollars(offer.amount)} offered.`);
+  offer.accepted = amount > 0;
+  if (amount > 0) offer.taken = amount;
+  else delete offer.taken;
   invariant(
     acceptedTotal(next) <= next.amount,
     'INVALID_INPUT',
@@ -141,20 +162,22 @@ export function withdrawMember(loan: LoanCase, memberId: PersonId): LoanCase {
   const o = findOffer(next, memberId);
   o.status = 'expired';
   o.accepted = false;
+  delete o.taken;
   return next;
 }
 
 export function acceptedTotal(loan: LoanCase): Cents {
-  return sum(loan.offers.filter((o) => o.status === 'offered' && o.accepted).map((o) => o.amount));
+  return sum(loan.offers.map(takenFrom));
 }
 
 /** The agreements the borrower would sign right now (used for the preview too). */
 export function draftAgreements(loan: LoanCase, rules: Rules = DEFAULT_RULES): Agreement[] {
   return loan.offers
-    .filter((o) => o.status === 'offered' && o.accepted)
+    .filter((o) => takenFrom(o) > 0)
     .map((o) => {
-      const fee = feeFor(o.amount, rules);
-      return { lenderId: o.memberId, principal: o.amount, interestRate: 0, fee, total: o.amount + fee };
+      const principal = takenFrom(o);
+      const fee = feeFor(principal, rules);
+      return { lenderId: o.memberId, principal, interestRate: 0, fee, total: principal + fee };
     });
 }
 
