@@ -33,7 +33,8 @@ function TakeOffer({ loan, offer }: { loan: LoanCase; offer: Offer }) {
           <DollarInput id={id} value={draft} invalid={draft > most} describedBy={`${id}-help`} onChange={setDraft} onCommit={() => save(draft)} />
         </span>
         {most > 0 && draft !== most ? (
-          <button type="button" className="fs-chip" onClick={() => save(most)}>
+          // onMouseDown keeps focus in the box, so leaving it doesn't save the typed amount first.
+          <button type="button" className="fs-chip" onMouseDown={(e) => e.preventDefault()} onClick={() => save(most)}>
             Take {formatMoney(most)}
           </button>
         ) : null}
