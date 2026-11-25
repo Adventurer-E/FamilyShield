@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { FamilyShieldError } from '@familyshield/core';
+import { FamilyShieldError, lenderAction } from '@familyshield/core';
 import type { Eligibility, LoanCase, PersonId } from '@familyshield/core';
 import type { AppConfig, FamilyShieldApi, Profile } from '../api/types';
 import type { HostEvent } from '../bridge';
@@ -63,14 +63,8 @@ export function homeRoute(role: Role): Route {
 
 /** Does someone in my family need an answer from me as a lender? */
 export function lenderNeedsAction(data: Pick<FsData, 'incoming' | 'profile'>): boolean {
-  const me = data.profile.me.id;
-  return data.incoming.some((loan) => {
-    if (loan.status === 'collecting') return loan.offers[0]?.status === 'pending';
-    const agreement = loan.agreements.find((a) => a.lenderId === me);
-    if (!agreement) return false;
-    if (loan.status === 'signing') return !agreement.lenderSignedAt;
-    return loan.pause?.status === 'pending' && loan.pause.approvals[me] === null;
-  });
+  // The same rule as the lender home's "Reply", "Sign" and "Answer" pills (core: lenderAction).
+  return data.incoming.some((loan) => lenderAction(loan, data.profile.me.id) !== null);
 }
 
 /**

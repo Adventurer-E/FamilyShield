@@ -1,5 +1,6 @@
 import { defaultRole, useFs } from './context';
-import { BorrowerHome, LenderHome } from './screens/Home';
+import { BorrowerHome } from './screens/Home';
+import { LenderHome } from './screens/LenderHome';
 import { Request } from './screens/Request';
 import { Offers } from './screens/Offers';
 import { Agreement } from './screens/Agreement';

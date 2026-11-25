@@ -310,6 +310,19 @@ describe('the trusted circle', () => {
     expect(svc.incoming('mom')[0]!.offers).toEqual([expect.objectContaining({ memberId: 'mom', status: 'expired' })]);
   });
 
+  it('still shows a cancelled request to everyone who was asked, so they know what happened', () => {
+    const { svc } = setup();
+    const loan = svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 150_000, months: 10 });
+    familyAnswers(svc, loan.id); // Maya offers, Lisa declines, Mom hasn't answered
+    svc.cancelRequest('alex', loan.id);
+    expect(svc.myLoan('alex')).toBeNull();
+    for (const who of ['mom', 'maya', 'lisa']) {
+      const [seen] = svc.incoming(who);
+      expect(seen).toMatchObject({ id: loan.id, status: 'cancelled' });
+      expect(seen!.offers.map((o) => o.memberId)).toEqual([who]);
+    }
+  });
+
   it('stops a scripted relative from answering once removed', () => {
     const { svc, advance } = setup(SCRIPTED_MAYA);
     svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 150_000, months: 10 });
