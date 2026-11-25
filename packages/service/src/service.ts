@@ -14,6 +14,7 @@ import {
   respondToPause,
   respondToRequest,
   setOfferAccepted,
+  setOfferTaken,
   signAsBorrower,
   signAsLender,
   withdrawMember,
@@ -23,6 +24,7 @@ import type {
   AppConfig,
   MockupClock,
   BankDashboard,
+  Cents,
   CreateRequestInput,
   Eligibility,
   LenderResponse,
@@ -377,6 +379,7 @@ export class FamilyShieldService {
         borrowerId: userId,
         circle: db.circles.filter((c) => c.ownerId === userId).map((c) => c.memberId),
         reason: input.reason,
+        reasonLabel: input.reasonLabel,
         purpose: input.purpose,
         amount: input.amount,
         months: input.months,
@@ -406,6 +409,10 @@ export class FamilyShieldService {
   }
   setOfferAccepted(userId: string, loanId: string, memberId: string, accepted: boolean) {
     return this.mutate(loanId, (l) => setOfferAccepted(l, memberId, accepted), this.asBorrower(userId));
+  }
+  /** How much to take from one offer, in cents; 0 = not taking it (B5). */
+  setOfferTaken(userId: string, loanId: string, memberId: string, amount: Cents) {
+    return this.mutate(loanId, (l) => setOfferTaken(l, memberId, amount), this.asBorrower(userId));
   }
   signAsBorrower(userId: string, loanId: string) {
     return this.mutate(loanId, (l, db) => signAsBorrower(l, this.iso(), db.rules), this.asBorrower(userId));

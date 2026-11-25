@@ -11,7 +11,8 @@ export interface Person {
   nickname?: string;
 }
 
-export type Reason = 'car' | 'medical' | 'job' | 'other';
+/** A preset reason from reasons.csv, or 'custom' when the borrower wrote their own (see LoanCase.reasonLabel). */
+export type Reason = 'car' | 'medical' | 'job' | 'other' | 'custom';
 
 export type OfferStatus = 'pending' | 'offered' | 'declined' | 'expired';
 
@@ -22,6 +23,11 @@ export interface Offer {
   amount: Cents;
   note?: string;
   accepted: boolean;
+  /**
+   * How much of this offer the borrower takes, when `accepted` (B5): at most `amount`.
+   * Missing means the whole offer. Use `takenFrom(offer)` rather than reading it directly.
+   */
+  taken?: Cents;
   respondedAt?: IsoTimestamp;
 }
 
@@ -80,6 +86,8 @@ export interface LoanCase {
   id: string;
   borrowerId: PersonId;
   reason: Reason;
+  /** The borrower's own words for what happened, only when reason is 'custom'. */
+  reasonLabel?: string;
   purpose: string;
   amount: Cents;
   months: number;

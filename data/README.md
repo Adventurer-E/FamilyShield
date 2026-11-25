@@ -64,11 +64,12 @@ Extra columns are ignored.
 | key | Meaning | Default |
 | --- | --- | --- |
 | `fee_rate_percent` | One-time service fee, added to what the borrower repays | `5` |
-| `min_request` / `max_request` | Request limits in dollars | `500` / `5000` |
-| `request_step` | Amount stepper increment in dollars | `250` |
-| `terms_months` | Terms a borrower can choose, separated by `\|` | `6\|10\|12` |
+| `min_request` / `max_request` | Request limits in whole dollars. Borrowers can ask for any whole-dollar amount in between | `500` / `5000` |
+| `request_step` | How far the − and + buttons move the amount, in dollars. Not a rule: borrowers can also type any amount | `250` |
+| `min_term_months` / `max_term_months` | Shortest and longest repayment term. Borrowers can pick any whole number of months in between | `3` / `24` |
+| `terms_months` | Suggested terms shown as one-tap choices, separated by `\|`; each must be between `min_term_months` and `max_term_months`. "Another term" lets the borrower type any other | `6\|10\|12` |
 | `default_request` | Amount the request screen starts at, in dollars (must be between `min_request` and `max_request`) | `1500` |
-| `default_term_months` | Term the request screen starts at (must be one of `terms_months`) | `10` |
+| `default_term_months` | Term the request screen starts at (between `min_term_months` and `max_term_months`) | `10` |
 | `lender_offer_amounts` | Quick-pick amounts a lender sees when offering, in dollars, separated by `\|`. Only amounts up to the request are shown; a "The full $X" choice appears when the request is larger than all of them | `250\|500\|1000` |
 | `max_pauses` | One-month pauses allowed per loan | `1` |
 | `pilot_signup_url` | Where the **Join the pilot** button on both FamilyShield homes goes, e.g. the waitlist Google Form, or a short link that counts clicks and forwards to it. Must start with `https://`; blank hides the button | the waitlist form |
@@ -116,7 +117,10 @@ The "What happened?" choices on the request screen, in the order shown:
 `id` (one of `car`, `medical`, `job`, `other`; stored on the loan), `label`
 (the button text) and `template` (the description it pre-fills, which the
 borrower can rewrite). Remove a row to hide that choice. If the file is
-missing, the built-in four are used.
+missing, the built-in four are used. A **Write my own** choice always follows
+them: the borrower types what happened (up to 40 characters), and the loan is
+saved with reason `custom` and their words in `reason_label`. It isn't a row
+here, so `custom` can't be used as an `id`.
 
 ### `example_transactions.csv`: everyday bank activity
 
@@ -144,8 +148,8 @@ Setup tables are untouched.
 | --- | --- | --- |
 | `new_people.csv` | account created by adding someone | `id`, `first_name`, `last_name`, `email`, `phone`, `created_by` (who added them), `created_at`. Written when someone adds an email or phone that nobody in `people.csv` has; these people start with a $0 balance and also appear in **Viewing as**. Empty in the shared starting state |
 | `circles.csv` | (owner, member) pair | `owner_id`, `member_id`, `nickname` (how the owner refers to them, e.g. "Mom"; blank = their first name). A request goes to everyone in the borrower's circle when it is created. Edited from the app (docs/API.md, "Trusted circle"); a member can't be the owner or appear twice for the same owner |
-| `loans.csv` | request / loan | `id`, `borrower_id`, `reason` (car, medical, job, other), `purpose`, `amount`, `months`, `status` (collecting, signing, active, repaid, cancelled), `created_at`, `funded_at`, `repaid_at`, `points`, `pauses_used` |
-| `offers.csv` | person asked | `loan_id`, `member_id`, `status` (pending, offered, declined, expired), `amount`, `accepted`, `note`, `responded_at` |
+| `loans.csv` | request / loan | `id`, `borrower_id`, `reason` (car, medical, job, other, custom), `reason_label` (the borrower's own words, only for custom), `purpose`, `amount`, `months`, `status` (collecting, signing, active, repaid, cancelled), `created_at`, `funded_at`, `repaid_at`, `points`, `pauses_used` |
+| `offers.csv` | person asked | `loan_id`, `member_id`, `status` (pending, offered, declined, expired), `amount`, `accepted`, `taken` (how much of the offer the borrower takes, in dollars; blank = all of it), `note`, `responded_at` |
 | `agreements.csv` | lender | `loan_id`, `lender_id`, `principal`, `interest_rate_percent`, `fee`, `total` (always recalculated as principal + fee), `borrower_signed_at`, `lender_signed_at` |
 | `installments.csv` | monthly payment | `loan_id`, `number` (1, 2, …), `due_date`, `amount`, `paid_at`, `on_time` |
 | `installment_splits.csv` | who gets what from a payment | `loan_id`, `number`, `pays_to` (a lender id, or `fee`), `amount`. These are the source of truth: an installment's amount is the sum of its splits |

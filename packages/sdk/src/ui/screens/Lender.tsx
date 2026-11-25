@@ -1,22 +1,16 @@
 import { useState } from 'react';
-import { DEFAULT_REASONS, formatDate, formatMoney, lenderSummary, overdueOf } from '@familyshield/core';
+import { formatDate, formatMoney, lenderSummary, overdueOf, reasonLabelOf, takenFrom } from '@familyshield/core';
 import type { LoanCase } from '@familyshield/core';
 import { useFs } from '../context';
-import { Avatar, Button, Notice, Progress, Screen } from '../kit';
+import { Avatar, Button, DollarInput, Notice, Progress, Screen } from '../kit';
 import { CheckIcon } from '../icons';
 import { AgreementDoc } from './Agreement';
 
-/**
- * The label for why someone asked: the same as the borrower's "What happened?" chips (data/reasons.csv).
- * Falls back to the built-in label if that reason was since removed from the file.
- */
-export function reasonLabel(reasons: ReadonlyArray<{ id: string; label: string }>, reason: LoanCase['reason']): string {
-  return reasons.find((r) => r.id === reason)?.label ?? DEFAULT_REASONS.find((r) => r.id === reason)?.label ?? reason;
-}
-
 function RequestSummary({ loan }: { loan: LoanCase }) {
   const { nameOf, fullNameOf, data } = useFs();
-  const reason = reasonLabel(data.config.reasons, loan.reason);
+  // Same labels as the borrower's "What happened?" chips (data/reasons.csv),
+  // or the borrower's own words when they wrote their own reason.
+  const reason = reasonLabelOf(loan, data.config.reasons);
   return (
     <section className="fs-card">
       <div className="fs-row">
@@ -47,6 +41,8 @@ export function Respond({ loan }: { loan: LoanCase }) {
   const [amount, setAmount] = useState(presets[presets.length - 1] ?? loan.amount);
   const [note, setNote] = useState('');
   const who = nameOf(loan.borrowerId);
+  // Same rule as respondToRequest: a whole-dollar amount from $1 up to the request.
+  const amountOk = amount >= 100 && amount <= loan.amount;
 
   return (
     <Screen title={`A request from ${who}`}>
@@ -83,12 +79,22 @@ export function Respond({ loan }: { loan: LoanCase }) {
               </button>
             ) : null}
           </fieldset>
+          {/* Or any whole-dollar amount up to the request; the chips above are shortcuts. */}
+          <div className="fs-field">
+            <label htmlFor="fs-offer-amount">Or type an amount</label>
+            <DollarInput id="fs-offer-amount" value={amount} invalid={!amountOk} describedBy="fs-offer-amount-help" onChange={setAmount} />
+            <span id="fs-offer-amount-help" className="fs-tiny fs-muted" style={{ color: amountOk ? undefined : '#8A1C1C' }}>
+              Any whole-dollar amount up to the {formatMoney(loan.amount)} {who} asked for
+            </span>
+          </div>
           <div className="fs-field">
             <label htmlFor="fs-note">A note for {who} <span className="fs-small fs-muted" style={{ fontWeight: 600 }}>· optional</span></label>
             <textarea id="fs-note" className="fs-input" rows={2} maxLength={280} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Happy to help. Take the time you need." />
           </div>
           <p className="fs-tiny fs-muted" style={{ margin: 0 }}>Interest-free. You’ll both sign the terms before any money moves.</p>
-          <Button onClick={() => run(() => api.respond(loan.id, { kind: 'offer', amount, note }))}>Offer {formatMoney(amount)} privately</Button>
+          <Button disabled={!amountOk} onClick={() => run(() => api.respond(loan.id, { kind: 'offer', amount, note }))}>
+            {amountOk ? `Offer ${formatMoney(amount)} privately` : 'Choose an amount to offer'}
+          </Button>
           <Button variant="secondary" onClick={() => run(() => api.respond(loan.id, { kind: 'decline', note }))}>Not this time</Button>
         </>
       ) : null}
@@ -106,7 +112,11 @@ export function Respond({ loan }: { loan: LoanCase }) {
           <p className="fs-small" style={{ margin: 0, color: '#3B4659' }}>
             {mine.status === 'offered'
               ? loan.status === 'collecting'
-                ? `${who} will see your offer. If they accept, you’ll both review and e-sign the terms before any money moves.`
+                ? mine.accepted && takenFrom(mine) < mine.amount
+                  ? `${who} accepted ${formatMoney(takenFrom(mine))} of it. You’ll both review and e-sign the terms for ${formatMoney(takenFrom(mine))} before any money moves.`
+                  : mine.accepted
+                    ? `${who} accepted your offer. You’ll both review and e-sign the terms before any money moves.`
+                    : `${who} will see your offer. If they accept, you’ll both review and e-sign the terms before any money moves.`
                 : `${who} didn’t take this offer, and nothing was signed. Thank you for offering.`
               : mine.status === 'declined'
                 ? `${who} sees “not this time”. No reason needed, and nobody else in the family will know.`
@@ -125,6 +135,8 @@ export function LenderLoan({ loan }: { loan: LoanCase }) {
   const ls = lenderSummary(loan, me);
   const who = nameOf(loan.borrowerId);
   if (!ls.agreement) return <Respond loan={loan} />;
+  // What I offered: more than I lend when the borrower took only part of it (B5).
+  const offered = loan.offers.find((o) => o.memberId === me)?.amount ?? ls.lent;
   const nextMine = loan.schedule.find((i) => !i.paidAt);
   // A payment to me that hasn't arrived (C2). The amounts here are my share only.
   const late = overdueOf(loan, data.eligibility.today, data.config.rules);
@@ -133,6 +145,11 @@ export function LenderLoan({ loan }: { loan: LoanCase }) {
     <Screen title={`Your loan to ${who}`}>
       {loan.status === 'signing' ? (
         <>
+          {offered > ls.lent ? (
+            <Notice kind="info">
+              {who} accepted {formatMoney(ls.lent)} of your {formatMoney(offered)} offer, so this agreement is for {formatMoney(ls.lent)}. You lend {formatMoney(ls.lent)}, not {formatMoney(offered)}.
+            </Notice>
+          ) : null}
           <AgreementDoc agreement={ls.agreement} months={loan.months} borrowerId={loan.borrowerId} />
           <Notice kind="info">
             The {+((ls.agreement.fee / ls.agreement.principal) * 100).toFixed(2)}% service fee is paid by {who} to FamilyShield. You get back exactly the {formatMoney(ls.lent)} you lend.

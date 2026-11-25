@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { DEFAULT_REASONS, formatDate, formatMoney } from '@familyshield/core';
+import { formatDate, formatMoney, reasonLabelOf } from '@familyshield/core';
+import type { Reason } from '@familyshield/core';
 import type { BankDashboard as Dashboard, DashboardCustomer, DashboardLoan, LoanStatus } from '@familyshield/core';
 import { host } from './host';
 
@@ -18,7 +19,8 @@ const STATUS_LABEL: Record<LoanStatus, string> = {
   cancelled: 'Cancelled',
 };
 
-const reasonLabel = (id: string) => DEFAULT_REASONS.find((r) => r.id === id)?.label ?? id;
+// The bank sees the kind of reason, never the borrower's own words.
+const reasonLabel = (reason: Reason) => reasonLabelOf({ reason }, undefined, { hideOwnWords: true });
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 const plural = (n: number, word: string) => `${n.toLocaleString('en-US')} ${word}${n === 1 ? '' : 's'}`;
 

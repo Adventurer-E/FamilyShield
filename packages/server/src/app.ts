@@ -94,6 +94,7 @@ export function createApp(service: FamilyShieldService, options: { allowOrigin?:
   route('POST', '/v1/loans', (c) => {
     const input: CreateRequestInput = {
       reason: str(c.body.reason, 'reason') as CreateRequestInput['reason'],
+      ...(typeof c.body.reasonLabel === 'string' ? { reasonLabel: c.body.reasonLabel } : {}),
       purpose: str(c.body.purpose, 'purpose'),
       amount: numb(c.body.amount, 'amount'),
       months: numb(c.body.months, 'months'),
@@ -101,8 +102,11 @@ export function createApp(service: FamilyShieldService, options: { allowOrigin?:
     return service.createRequest(c.user(), input);
   });
   route('POST', '/v1/loans/:id/cancel', (c) => service.cancelRequest(c.user(), c.params.id!));
+  // { amount } takes that much of the offer (0 = none, B5); { accepted } takes all or none of it.
   route('POST', '/v1/loans/:id/offers/:memberId/acceptance', (c) =>
-    service.setOfferAccepted(c.user(), c.params.id!, c.params.memberId!, boolean(c.body.accepted, 'accepted')),
+    c.body.amount !== undefined
+      ? service.setOfferTaken(c.user(), c.params.id!, c.params.memberId!, numb(c.body.amount, 'amount'))
+      : service.setOfferAccepted(c.user(), c.params.id!, c.params.memberId!, boolean(c.body.accepted, 'accepted')),
   );
   route('POST', '/v1/loans/:id/sign', (c) => service.signAsBorrower(c.user(), c.params.id!));
   route('POST', '/v1/loans/:id/payments', (c) => service.makePayment(c.user(), c.params.id!));

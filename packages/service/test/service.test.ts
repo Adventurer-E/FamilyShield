@@ -81,6 +81,7 @@ describe('reading data/', () => {
     const db = readDatabase(loadDataDir());
     expect(db.rules.feeRate).toBe(0.05);
     expect(db.rules.terms).toEqual([6, 10, 12]);
+    expect([db.rules.termMin, db.rules.termMax]).toEqual([3, 24]);
     expect(db.people.find((p) => p.id === 'alex')!.openingBalance).toBe(432_850);
     expect(db.rewards.map((r) => r.id)).toEqual(['dinner', 'trip', 'activity']);
     expect(db.autoReplies).toEqual([]); // nobody answers on their own in the shared data
@@ -108,12 +109,32 @@ describe('reading data/', () => {
 
   it('rejects request defaults the rules don’t allow', () => {
     const base = loadDataDir();
-    const term = { ...base, 'settings.csv': base['settings.csv']!.replace('default_term_months,10,', 'default_term_months,9,') };
+    const term = { ...base, 'settings.csv': base['settings.csv']!.replace('default_term_months,10,', 'default_term_months,30,') };
     expect(() => readDatabase(term)).toThrow(/default_term_months/);
+    // A default term that isn't a suggestion is fine, as long as it's in range.
+    const unlisted = { ...base, 'settings.csv': base['settings.csv']!.replace('default_term_months,10,', 'default_term_months,9,') };
+    expect(readDatabase(unlisted).rules.defaultTerm).toBe(9);
+    const centsDefault = { ...base, 'settings.csv': base['settings.csv']!.replace('default_request,1500,', 'default_request,1500.50,') };
+    expect(() => readDatabase(centsDefault)).toThrow(/whole dollars/);
     const amount = { ...base, 'settings.csv': base['settings.csv']!.replace('default_request,1500,', 'default_request,9000,') };
     expect(() => readDatabase(amount)).toThrow(/default_request/);
     const reason = { ...base, 'reasons.csv': 'id,label,template\nrent,Rent,Behind on rent\n' };
     expect(() => readDatabase(reason)).toThrow(/reasons\.csv, line 2, column "id"/);
+  });
+
+  it('rejects term limits that don’t make sense', () => {
+    const base = loadDataDir();
+    const set = (from: string, to: string) => ({ ...base, 'settings.csv': base['settings.csv']!.replace(from, to) });
+    expect(() => readDatabase(set('min_term_months,3,', 'min_term_months,30,'))).toThrow(/min_term_months is larger/);
+    expect(() => readDatabase(set('min_term_months,3,', 'min_term_months,0,'))).toThrow(/at least 1/);
+    expect(() => readDatabase(set('terms_months,6|10|12,', 'terms_months,6|10|36,'))).toThrow(/terms_months 36 must be between/);
+    expect(() => readDatabase(set('max_term_months,24,', 'max_term_months,soon,'))).toThrow(/settings\.csv, line \d+, column "value"/);
+  });
+
+  it('keeps “custom” for the borrower’s own words, not a row in reasons.csv', () => {
+    const base = loadDataDir();
+    const files = { ...base, 'reasons.csv': base['reasons.csv']! + 'custom,Mine,My own\n' };
+    expect(() => readDatabase(files)).toThrow(/reasons\.csv, line \d+, column "id"/);
   });
 
   it('falls back to the built-in reasons when reasons.csv is missing', () => {
@@ -203,6 +224,27 @@ describe('the service over CSVs', () => {
     const db = readDatabase(storage.files);
     expect(writeActivity(db)).toEqual(Object.fromEntries(Object.keys(writeActivity(db)).map((f) => [f, storage.files[f]])));
     expect(db.loans[0]!.purpose).toBe('Bill, "urgent"\nsecond line');
+  });
+
+  it('sends any amount, any term and the borrower’s own reason, and reads them back', () => {
+    const { svc, storage } = setup();
+    const loan = svc.createRequest('alex', { reason: 'custom', reasonLabel: 'Broken water heater', purpose: 'Cold showers, ugh', amount: 133_700, months: 7 });
+    expect(loan).toMatchObject({ reason: 'custom', reasonLabel: 'Broken water heater', amount: 133_700, months: 7 });
+    expect(storage.files['loans.csv']).toContain('custom,Broken water heater,');
+    const back = readDatabase(storage.files).loans[0]!;
+    expect(back).toMatchObject({ reason: 'custom', reasonLabel: 'Broken water heater', amount: 133_700, months: 7 });
+    // The lender sees the borrower's own words on the request.
+    expect(svc.incoming('maya')[0]!.reasonLabel).toBe('Broken water heater');
+  });
+
+  it('reads loans saved before own reasons existed', () => {
+    const { svc, storage } = setup();
+    svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 100_000, months: 6 });
+    // Drop the reason_label column, as in a loans.csv written by an older version.
+    const old = storage.files['loans.csv']!.split('\n').map((line) => line.split(',').filter((_, i) => i !== 3).join(',')).join('\n');
+    const loan = readDatabase({ ...storage.files, 'loans.csv': old }).loans[0]!;
+    expect(loan.reason).toBe('car');
+    expect(loan.reasonLabel).toBeUndefined();
   });
 
   it('keeps borrowers and lenders in their lanes', () => {
@@ -308,6 +350,26 @@ describe('the trusted circle', () => {
     expect(() => svc.respond('mom', loan.id, { kind: 'offer', amount: 100_000 })).toThrow(/already answered/);
     expect(() => svc.signAsBorrower('alex', loan.id)).toThrow(/Accept at least one/);
     expect(svc.incoming('mom')[0]!.offers).toEqual([expect.objectContaining({ memberId: 'mom', status: 'expired' })]);
+  });
+
+  it('combines two offers by taking part of each, stores it and moves only what was taken (B5)', () => {
+    const { svc, storage } = setup();
+    const loan = svc.createRequest('alex', { reason: 'car', purpose: 'x', amount: 150_000, months: 10 });
+    svc.respond('maya', loan.id, { kind: 'offer', amount: 100_000 });
+    svc.respond('mom', loan.id, { kind: 'offer', amount: 100_000 });
+    svc.setOfferTaken('alex', loan.id, 'maya', 75_000);
+    svc.setOfferTaken('alex', loan.id, 'mom', 75_000);
+    expect(storage.read()['offers.csv']).toMatch(/maya,offered,1000\.00,yes,750\.00/);
+    // Maya sees her own offer and how much of it Alex is taking.
+    expect(svc.incoming('maya')[0]!.offers).toMatchObject([{ memberId: 'maya', amount: 100_000, accepted: true, taken: 75_000 }]);
+
+    const mayaBefore = svc.account('maya').balance;
+    svc.signAsBorrower('alex', loan.id);
+    expect(svc.incoming('maya')[0]!.agreements).toMatchObject([{ lenderId: 'maya', principal: 75_000 }]);
+    svc.signAsLender('maya', loan.id);
+    svc.signAsLender('mom', loan.id);
+    expect(svc.myLoan('alex')!.status).toBe('active');
+    expect(svc.account('maya').balance).toBe(mayaBefore - 75_000);
   });
 
   it('still shows a cancelled request to everyone who was asked, so they know what happened', () => {

@@ -1,10 +1,9 @@
-import { formatDate, formatMoney, lenderHome } from '@familyshield/core';
+import { formatDate, formatMoney, lenderHome, reasonLabelOf } from '@familyshield/core';
 import type { LenderAgreementItem, LenderOfferItem, LoanCase } from '@familyshield/core';
 import { useFs } from '../context';
 import { Avatar, Progress, Screen } from '../kit';
 import { ChevronIcon } from '../icons';
 import { PilotSignup, RoleSwitch, TrustedCircle } from './Home';
-import { reasonLabel } from './Lender';
 
 type Pill = { text: string; tone: '' | 'brand' | 'solid' | 'warn' };
 
@@ -40,7 +39,7 @@ function RequestsList({ loans }: { loans: LoanCase[] }) {
             key={loan.id}
             personId={loan.borrowerId}
             title={`${nameOf(loan.borrowerId)} · ${formatMoney(loan.amount)}`}
-            detail={`${reasonLabel(data.config.reasons, loan.reason)} · over ${loan.months} months, interest-free`}
+            detail={`${reasonLabelOf(loan, data.config.reasons)} · over ${loan.months} months, interest-free`}
             pill={{ text: 'Reply', tone: 'solid' }}
             onClick={() => go({ name: 'respond', loanId: loan.id })}
           />
@@ -55,7 +54,9 @@ function offerText(item: LenderOfferItem, who: string): { detail: string; pill: 
     case 'waiting':
       return { detail: `Waiting for ${who} to choose`, pill: { text: 'Offered', tone: 'brand' } };
     case 'accepted':
-      return { detail: `${who} accepted · you’ll both sign the terms next`, pill: { text: 'Accepted', tone: 'brand' } };
+      return item.taken < item.offer.amount
+        ? { detail: `${who} accepted ${formatMoney(item.taken)} of your ${formatMoney(item.offer.amount)} offer · you’ll both sign the terms next`, pill: { text: 'Accepted', tone: 'brand' } }
+        : { detail: `${who} accepted · you’ll both sign the terms next`, pill: { text: 'Accepted', tone: 'brand' } };
     case 'not-taken':
       return { detail: `${who} went ahead without it · nothing was signed`, pill: { text: 'Not taken', tone: '' } };
     case 'declined':
@@ -100,7 +101,10 @@ function agreementText(item: LenderAgreementItem, who: string): { detail: string
   if (item.action === 'pause') return { detail: `${who} asked to pause one month`, pill: { text: 'Answer', tone: 'solid' } };
   switch (item.state) {
     case 'to-sign':
-      return { detail: 'Agreement ready for your signature', pill: { text: 'Sign', tone: 'solid' } };
+      return {
+        detail: item.offered > item.lent ? `${who} accepted ${formatMoney(item.lent)} of your ${formatMoney(item.offered)} offer · ready for your signature` : 'Agreement ready for your signature',
+        pill: { text: 'Sign', tone: 'solid' },
+      };
     case 'signed':
       return { detail: 'You signed · the money moves once everyone signs', pill: { text: 'Signed', tone: '' } };
     case 'late':

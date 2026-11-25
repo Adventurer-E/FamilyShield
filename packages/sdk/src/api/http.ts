@@ -1,5 +1,5 @@
 import { FamilyShieldError } from '@familyshield/core';
-import type { FamilyShieldErrorCode, LenderResponse, LoanCase, Person } from '@familyshield/core';
+import type { Cents, FamilyShieldErrorCode, LenderResponse, LoanCase, Person } from '@familyshield/core';
 import type { AppConfig, CreateRequestInput, Eligibility, FamilyShieldApi, Profile } from './types';
 
 export interface HttpApiOptions {
@@ -90,6 +90,9 @@ export class HttpApi implements FamilyShieldApi {
   }
   setOfferAccepted(loanId: string, memberId: string, accepted: boolean) {
     return this.call<LoanCase>('POST', `/loans/${encodeURIComponent(loanId)}/offers/${encodeURIComponent(memberId)}/acceptance`, { accepted });
+  }
+  setOfferTaken(loanId: string, memberId: string, amount: Cents) {
+    return this.call<LoanCase>('POST', `/loans/${encodeURIComponent(loanId)}/offers/${encodeURIComponent(memberId)}/acceptance`, { amount });
   }
   signAsBorrower(loanId: string) {
     return this.call<LoanCase>('POST', `/loans/${encodeURIComponent(loanId)}/sign`);

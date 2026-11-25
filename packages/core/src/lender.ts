@@ -3,6 +3,7 @@ import type { Rules } from './config';
 import type { IsoDate } from './dates';
 import { sum } from './money';
 import type { Cents } from './money';
+import { takenFrom } from './loan';
 import { overdueOf } from './overdue';
 import type { Agreement, LoanCase, Offer, PersonId } from './types';
 
@@ -31,7 +32,7 @@ export function lenderAction(loan: LoanCase, lenderId: PersonId): LenderAction |
 /**
  * Where an offer I made stands, once I've answered and before there's an agreement:
  * - waiting: the request is still open and the borrower hasn't chosen yet
- * - accepted: the borrower accepted it; the agreement comes once they sign
+ * - accepted: the borrower accepted it, or part of it (`taken`); the agreement comes once they sign
  * - not-taken: the borrower went ahead without it, and nothing was signed
  * - declined: I said "not this time"
  * - closed: the request closed before I answered
@@ -43,6 +44,8 @@ export interface LenderOfferItem {
   loan: LoanCase;
   offer: Offer;
   state: LenderOfferState;
+  /** How much of my offer the borrower is taking (B5); 0 unless accepted. */
+  taken: Cents;
 }
 
 /**
@@ -60,6 +63,8 @@ export interface LenderAgreementItem {
   state: LenderAgreementState;
   /** 'sign' or 'pause' when the agreement needs my answer. */
   action: LenderAction | null;
+  /** What I offered. More than `lent` when the borrower took only part of it (B5). */
+  offered: Cents;
   lent: Cents;
   received: Cents;
   outstanding: Cents;
@@ -110,6 +115,7 @@ function agreementItem(loan: LoanCase, agreement: Agreement, lenderId: PersonId,
     agreement,
     state,
     action: lenderAction(loan, lenderId),
+    offered: Math.max(lent, loan.offers.find((o) => o.memberId === lenderId)?.amount ?? 0),
     lent,
     received,
     outstanding: Math.max(0, lent - received),
@@ -145,7 +151,7 @@ export function lenderHome(incoming: LoanCase[], lenderId: PersonId, today: IsoD
     const offer = loan.offers.find((o) => o.memberId === lenderId);
     if (!offer) continue;
     if (lenderAction(loan, lenderId) === 'reply') requests.push(loan);
-    else offers.push({ loan, offer, state: offerState(loan, offer) });
+    else offers.push({ loan, offer, state: offerState(loan, offer), taken: loan.status === 'collecting' ? takenFrom(offer) : 0 });
   }
 
   // Anything that needs me first; otherwise keep the incoming order (newest first).

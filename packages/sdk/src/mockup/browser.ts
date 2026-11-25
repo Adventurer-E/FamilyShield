@@ -109,6 +109,7 @@ export function createBrowserMockup(options: { files: CsvFiles; storageKey?: str
         createRequest: (input) => async(() => service.createRequest(userId, input)),
         cancelRequest: (id) => async(() => service.cancelRequest(userId, id)),
         setOfferAccepted: (id, memberId, accepted) => async(() => service.setOfferAccepted(userId, id, memberId, accepted)),
+        setOfferTaken: (id, memberId, amount) => async(() => service.setOfferTaken(userId, id, memberId, amount)),
         signAsBorrower: (id) => async(() => service.signAsBorrower(userId, id)),
         makePayment: (id) => async(() => service.makePayment(userId, id)),
         requestPause: (id) => async(() => service.requestPause(userId, id)),

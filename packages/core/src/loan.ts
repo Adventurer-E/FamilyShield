@@ -3,6 +3,7 @@ import type { Rules } from './config';
 import { addMonths, toIsoDate } from './dates';
 import type { IsoTimestamp } from './dates';
 import { invariant } from './errors';
+import { CUSTOM_REASON_MAX } from './reasons';
 import { splitEvenly, sum } from './money';
 import type { Cents } from './money';
 import type { Agreement, Installment, LoanCase, Offer, PersonId, PointsEntry, Reason } from './types';
@@ -16,7 +17,7 @@ import type { Agreement, Installment, LoanCase, Offer, PersonId, PointsEntry, Re
 
 const clone = <T>(value: T): T => structuredClone(value);
 
-const REASONS: readonly Reason[] = ['car', 'medical', 'job', 'other'];
+const REASONS: readonly Reason[] = ['car', 'medical', 'job', 'other', 'custom'];
 
 export interface NewRequest {
   id: string;
@@ -24,6 +25,8 @@ export interface NewRequest {
   /** Circle members to ask. The borrower is never in this list. */
   circle: PersonId[];
   reason: Reason;
+  /** What happened in the borrower's own words; required when reason is 'custom', ignored otherwise. */
+  reasonLabel?: string;
   purpose: string;
   amount: Cents;
   months: number;
@@ -32,24 +35,38 @@ export interface NewRequest {
 
 const dollars = (c: Cents) => `$${(c / 100).toLocaleString('en-US')}`;
 
+/** Any whole-dollar amount from amountMin to amountMax. */
 export function validateAmount(amount: Cents, rules: Rules = DEFAULT_RULES): void {
-  invariant(Number.isInteger(amount), 'INVALID_INPUT', 'Amount must be whole cents.');
+  invariant(Number.isInteger(amount) && amount % 100 === 0, 'INVALID_INPUT', 'Ask for a whole-dollar amount.');
   invariant(
     amount >= rules.amountMin && amount <= rules.amountMax,
     'INVALID_INPUT',
     `Requests must be between ${dollars(rules.amountMin)} and ${dollars(rules.amountMax)}.`,
   );
-  invariant((amount - rules.amountMin) % rules.amountStep === 0, 'INVALID_INPUT', `Requests go in steps of ${dollars(rules.amountStep)}.`);
 }
 
+/** Any whole number of months from termMin to termMax. */
 export function isTerm(months: number, rules: Rules = DEFAULT_RULES): boolean {
-  return rules.terms.includes(months);
+  return Number.isInteger(months) && months >= rules.termMin && months <= rules.termMax;
 }
 
 export function createLoanCase(input: NewRequest, rules: Rules = DEFAULT_RULES): LoanCase {
   validateAmount(input.amount, rules);
-  invariant(isTerm(input.months, rules), 'INVALID_INPUT', `Choose a term of ${rules.terms.join(', ')} months.`);
+  invariant(
+    isTerm(input.months, rules),
+    'INVALID_INPUT',
+    `Choose a repayment term from ${rules.termMin} to ${rules.termMax} months.`,
+  );
   invariant(REASONS.includes(input.reason), 'INVALID_INPUT', 'Choose what happened.');
+  const reasonLabel = input.reason === 'custom' ? (input.reasonLabel ?? '').trim().replace(/\s+/g, ' ') : undefined;
+  if (reasonLabel !== undefined) {
+    invariant(reasonLabel.length > 0, 'INVALID_INPUT', 'Say in a few words what happened.');
+    invariant(
+      reasonLabel.length <= CUSTOM_REASON_MAX,
+      'INVALID_INPUT',
+      `Keep what happened under ${CUSTOM_REASON_MAX} characters; there’s room for details below.`,
+    );
+  }
   const purpose = input.purpose.trim();
   invariant(purpose.length > 0, 'INVALID_INPUT', 'Tell your circle what the money is for.');
   invariant(purpose.length <= 500, 'INVALID_INPUT', 'Keep the description under 500 characters.');
@@ -60,6 +77,7 @@ export function createLoanCase(input: NewRequest, rules: Rules = DEFAULT_RULES):
     id: input.id,
     borrowerId: input.borrowerId,
     reason: input.reason,
+    ...(reasonLabel !== undefined ? { reasonLabel } : {}),
     purpose,
     amount: input.amount,
     months: input.months,
@@ -111,13 +129,34 @@ export function respondToRequest(loan: LoanCase, memberId: PersonId, response: L
   return next;
 }
 
-/** The borrower picks which offers to take. */
+/** How much the borrower takes from this offer: 0 unless it was made and accepted. */
+export function takenFrom(offer: Offer): Cents {
+  if (offer.status !== 'offered' || !offer.accepted) return 0;
+  return Math.min(offer.taken ?? offer.amount, offer.amount);
+}
+
+/** The borrower takes the whole offer, or none of it. */
 export function setOfferAccepted(loan: LoanCase, memberId: PersonId, accepted: boolean): LoanCase {
+  const offer = loan.offers.find((o) => o.memberId === memberId);
+  return setOfferTaken(loan, memberId, accepted && offer ? offer.amount : 0);
+}
+
+/**
+ * The borrower chooses how much to take from one offer (B5), so offers that add up
+ * to more than the request can be combined: $750 from Maya and $750 from Grace.
+ * 0 means not taking it. Each amount is at most that offer, in whole dollars, and
+ * everything taken is at most the request. The agreement is drawn up for this amount.
+ */
+export function setOfferTaken(loan: LoanCase, memberId: PersonId, amount: Cents): LoanCase {
   invariant(loan.status === 'collecting', 'INVALID_STATE', 'Offers can only be changed before you sign.');
+  invariant(Number.isInteger(amount) && amount >= 0 && amount % 100 === 0, 'INVALID_INPUT', 'Choose a whole-dollar amount of $0 or more.');
   const next = clone(loan);
   const offer = findOffer(next, memberId);
   invariant(offer.status === 'offered', 'INVALID_STATE', 'Only offers that were made can be accepted.');
-  offer.accepted = accepted;
+  invariant(amount <= offer.amount, 'INVALID_INPUT', `You can take up to the ${dollars(offer.amount)} offered.`);
+  offer.accepted = amount > 0;
+  if (amount > 0) offer.taken = amount;
+  else delete offer.taken;
   invariant(
     acceptedTotal(next) <= next.amount,
     'INVALID_INPUT',
@@ -141,20 +180,22 @@ export function withdrawMember(loan: LoanCase, memberId: PersonId): LoanCase {
   const o = findOffer(next, memberId);
   o.status = 'expired';
   o.accepted = false;
+  delete o.taken;
   return next;
 }
 
 export function acceptedTotal(loan: LoanCase): Cents {
-  return sum(loan.offers.filter((o) => o.status === 'offered' && o.accepted).map((o) => o.amount));
+  return sum(loan.offers.map(takenFrom));
 }
 
 /** The agreements the borrower would sign right now (used for the preview too). */
 export function draftAgreements(loan: LoanCase, rules: Rules = DEFAULT_RULES): Agreement[] {
   return loan.offers
-    .filter((o) => o.status === 'offered' && o.accepted)
+    .filter((o) => takenFrom(o) > 0)
     .map((o) => {
-      const fee = feeFor(o.amount, rules);
-      return { lenderId: o.memberId, principal: o.amount, interestRate: 0, fee, total: o.amount + fee };
+      const principal = takenFrom(o);
+      const fee = feeFor(principal, rules);
+      return { lenderId: o.memberId, principal, interestRate: 0, fee, total: principal + fee };
     });
 }
 

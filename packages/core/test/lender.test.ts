@@ -9,6 +9,7 @@ import {
   respondToPause,
   respondToRequest,
   setOfferAccepted,
+  setOfferTaken,
   signAsBorrower,
   signAsLender,
 } from '../src';
@@ -100,6 +101,18 @@ describe('my offers', () => {
       expect(view.requests).toEqual([]);
       expect(lenderAction(loan, who)).toBeNull();
     }
+  });
+});
+
+describe('when the borrower takes part of my offer (B5)', () => {
+  it('says how much was accepted, before and after the borrower signs', () => {
+    let loan = respondToRequest(newRequest(), 'mom', { kind: 'offer', amount: 100_000 }, T0);
+    loan = respondToRequest(loan, 'maya', { kind: 'offer', amount: 100_000 }, T0);
+    loan = setOfferTaken(setOfferTaken(loan, 'mom', 75_000), 'maya', 75_000);
+    expect(lenderHome([redact(loan, 'mom')], 'mom', TODAY).offers).toMatchObject([{ state: 'accepted', taken: 75_000, offer: { amount: 100_000 } }]);
+    loan = signAsBorrower(loan, T0);
+    expect(lenderHome([redact(loan, 'mom')], 'mom', TODAY).agreements).toMatchObject([{ state: 'to-sign', offered: 100_000, lent: 75_000 }]);
+    expect(lenderHome([active()], 'mom', TODAY).agreements).toMatchObject([{ offered: 100_000, lent: 100_000 }]);
   });
 });
 
