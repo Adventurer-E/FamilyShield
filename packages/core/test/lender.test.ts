@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cancelRequest,
   createLoanCase,
   lenderAction,
   lenderHome,
@@ -57,11 +58,10 @@ describe('requests waiting for my answer', () => {
     expect(lenderAction(loan, 'mom')).toBe('reply');
   });
 
-  it('leaves out cancelled requests, my own requests and loans I was not asked about', () => {
-    const cancelled = { ...newRequest('loan_2'), status: 'cancelled' as const };
+  it('leaves out my own requests and loans I was not asked about', () => {
     const mine = newRequest('loan_3', 'mom', ['alex']);
     const other = newRequest('loan_4', 'alex', ['maya']);
-    const view = lenderHome([cancelled, mine, other], 'mom', TODAY);
+    const view = lenderHome([mine, other], 'mom', TODAY);
     expect(view).toMatchObject({ requests: [], offers: [], agreements: [] });
   });
 });
@@ -87,6 +87,19 @@ describe('my offers', () => {
 
     const unanswered = signAsBorrower(setOfferAccepted(respondToRequest(newRequest(), 'mom', { kind: 'offer', amount: 100_000 }, T0), 'mom', true), T0);
     expect(lenderHome([unanswered], 'lisa', TODAY).offers).toMatchObject([{ state: 'closed' }]);
+  });
+  it('keeps a cancelled request for everyone asked, whatever they had answered', () => {
+    let loan = newRequest();
+    loan = respondToRequest(loan, 'mom', { kind: 'offer', amount: 100_000 }, T0);
+    loan = setOfferAccepted(loan, 'mom', true);
+    loan = respondToRequest(loan, 'lisa', { kind: 'decline' }, T0);
+    loan = cancelRequest(loan); // Maya hadn't replied
+    for (const who of ['mom', 'maya', 'lisa']) {
+      const view = lenderHome([redact(loan, who)], who, TODAY);
+      expect(view.offers).toMatchObject([{ state: 'cancelled' }]);
+      expect(view.requests).toEqual([]);
+      expect(lenderAction(loan, who)).toBeNull();
+    }
   });
 });
 

@@ -62,10 +62,12 @@ function offerText(item: LenderOfferItem, who: string): { detail: string; pill: 
       return { detail: 'You said “not this time” · only they know', pill: { text: 'Declined', tone: '' } };
     case 'closed':
       return { detail: 'The request closed before you answered', pill: { text: 'Closed', tone: '' } };
+    case 'cancelled':
+      return { detail: `${who} cancelled the request · nothing was signed`, pill: { text: 'Cancelled', tone: '' } };
   }
 }
 
-/** Offers I made (or declined) that haven't become an agreement. */
+/** Offers I made (or declined) that haven't become an agreement, and cancelled requests. */
 function OffersList({ items }: { items: LenderOfferItem[] }) {
   const { go, nameOf } = useFs();
   return (
@@ -75,12 +77,13 @@ function OffersList({ items }: { items: LenderOfferItem[] }) {
         {items.map((item) => {
           const who = nameOf(item.loan.borrowerId);
           const t = offerText(item, who);
-          const amount = item.offer.status === 'offered' ? item.offer.amount : item.loan.amount;
+          // My own offer when I made one; otherwise what they asked for, so it doesn't read as if I offered it.
+          const amount = item.offer.status === 'offered' ? `you offered ${formatMoney(item.offer.amount)}` : `asked for ${formatMoney(item.loan.amount)}`;
           return (
             <Row
               key={item.loan.id}
               personId={item.loan.borrowerId}
-              title={`${who} · ${formatMoney(amount)}`}
+              title={`${who} · ${amount}`}
               detail={t.detail}
               pill={t.pill}
               onClick={() => go({ name: 'respond', loanId: item.loan.id })}

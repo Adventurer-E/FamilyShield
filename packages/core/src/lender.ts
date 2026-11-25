@@ -35,8 +35,9 @@ export function lenderAction(loan: LoanCase, lenderId: PersonId): LenderAction |
  * - not-taken: the borrower went ahead without it, and nothing was signed
  * - declined: I said "not this time"
  * - closed: the request closed before I answered
+ * - cancelled: the borrower cancelled the request (whatever I had answered)
  */
-export type LenderOfferState = 'waiting' | 'accepted' | 'not-taken' | 'declined' | 'closed';
+export type LenderOfferState = 'waiting' | 'accepted' | 'not-taken' | 'declined' | 'closed' | 'cancelled';
 
 export interface LenderOfferItem {
   loan: LoanCase;
@@ -73,7 +74,7 @@ export interface LenderAgreementItem {
 export interface LenderHomeView {
   /** Open requests waiting for my answer. */
   requests: LoanCase[];
-  /** Offers I answered that never became an agreement. */
+  /** Offers I answered that never became an agreement, and requests that were cancelled. */
   offers: LenderOfferItem[];
   /** Agreements I'm part of: ones that need me first, then late, repaying, signed and repaid. */
   agreements: LenderAgreementItem[];
@@ -119,6 +120,7 @@ function agreementItem(loan: LoanCase, agreement: Agreement, lenderId: PersonId,
 }
 
 function offerState(loan: LoanCase, offer: Offer): LenderOfferState {
+  if (loan.status === 'cancelled') return 'cancelled';
   if (offer.status === 'declined') return 'declined';
   if (offer.status === 'offered') {
     if (loan.status === 'collecting') return offer.accepted ? 'accepted' : 'waiting';
@@ -134,7 +136,7 @@ export function lenderHome(incoming: LoanCase[], lenderId: PersonId, today: IsoD
   const agreements: LenderAgreementItem[] = [];
 
   for (const loan of incoming) {
-    if (loan.status === 'cancelled' || loan.borrowerId === lenderId) continue;
+    if (loan.borrowerId === lenderId) continue;
     const agreement = loan.agreements.find((a) => a.lenderId === lenderId);
     if (agreement) {
       agreements.push(agreementItem(loan, agreement, lenderId, today, rules));

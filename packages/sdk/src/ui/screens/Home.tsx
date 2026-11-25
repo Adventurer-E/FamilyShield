@@ -1,4 +1,4 @@
-import { formatDate, formatMoney, lenderSummary, nextInstallment, repaymentSummary } from '@familyshield/core';
+import { formatDate, formatMoney, nextInstallment, repaymentSummary } from '@familyshield/core';
 import type { LoanCase } from '@familyshield/core';
 import { lenderNeedsAction, useFs } from '../context';
 import type { Role, Route } from '../context';

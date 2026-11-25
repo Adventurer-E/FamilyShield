@@ -53,7 +53,9 @@ export function Respond({ loan }: { loan: LoanCase }) {
       <RequestSummary loan={loan} />
       <Notice>Your answer is private. {who} sees it, but no one else in the family does, and “not this time” is always fine.</Notice>
 
-      {loan.status !== 'collecting' && mine?.status === 'pending' ? (
+      {loan.status === 'cancelled' ? (
+        <Notice kind="info">{who} cancelled this request. Nothing was signed and no money moved.</Notice>
+      ) : loan.status !== 'collecting' && mine?.status === 'pending' ? (
         <Notice kind="info">This request has closed.</Notice>
       ) : null}
 
@@ -91,7 +93,7 @@ export function Respond({ loan }: { loan: LoanCase }) {
         </>
       ) : null}
 
-      {mine && mine.status !== 'pending' ? (
+      {mine && mine.status !== 'pending' && loan.status !== 'cancelled' ? (
         <section className="fs-card soft">
           <div className="fs-row">
             <span className="fs-avatar" style={{ background: 'var(--fs-brand)', color: '#fff', border: 'none', width: 32, height: 32 }}>

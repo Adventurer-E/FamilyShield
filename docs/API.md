@@ -46,7 +46,7 @@ in `packages/core/src/types.ts`. `Profile` is defined in
 | `GET /config` | `AppConfig` | `{ rules, reasons, rewards }`: the fee, limits, terms, request defaults (`defaultAmount`, `defaultTerm`), lender quick-pick amounts (`offerAmounts`), points, the request reasons with their pre-filled descriptions, and the reward catalog in force (from `settings.csv`, `reasons.csv` and `rewards.csv` in the mockup). No auth needed |
 | `GET /me` | `Profile` | The caller, their circle, the people they may see, and their linked account |
 | `GET /me/loan` | `LoanCase \| null` | The caller’s latest loan as borrower (excluding cancelled) |
-| `GET /me/incoming` | `LoanCase[]` | Requests the caller was asked on, **redacted** for a lender, newest first |
+| `GET /me/incoming` | `LoanCase[]` | Requests the caller was asked on, **redacted** for a lender, newest first. Cancelled requests are included, so lenders can see what happened. See “The lender home” below |
 | `GET /me/eligibility` | `Eligibility` | What the caller may do now: `{ today, eligible, blocks: [{ code, message }], overdue, lending }`. See “Who may start a request” below |
 
 ### Trusted circle
@@ -122,6 +122,26 @@ Paying clears it: each payment goes to the oldest unpaid installment.
 | `POST /loans/:id/responses` | `{ kind: 'offer', amount, note? }` or `{ kind: 'decline', note? }` | `respondToRequest` |
 | `POST /loans/:id/lender-signature` | — | `signAsLender`; the last signature triggers funding |
 | `POST /loans/:id/pause/responses` | `{ approve: boolean }` | `respondToPause` |
+
+#### The lender home
+
+`lenderHome(incoming, lenderId, today, rules)` in `packages/core/src/lender.ts`
+sorts `GET /me/incoming` into the three sections of the lender home. It works
+on redacted loans, so every amount is the lender's own share:
+
+- `requests`: open requests waiting for the lender's answer;
+- `offers`: answers that never became an agreement, each with a `state`:
+  `waiting`, `accepted`, `not-taken`, `declined`, `closed` (the request closed
+  before they answered) or `cancelled` (the borrower cancelled it);
+- `agreements`: each with a `state` (`to-sign`, `signed`, `repaying`, `late`,
+  `repaid`), `lent`, `received`, `outstanding`, `progress`, `next` (their share
+  of the next installment) and `late` (their overdue share, using `overdueOf`).
+  Ones that need the lender come first;
+- `totals`: lent and received across agreements where the money has moved.
+
+`lenderAction(loan, lenderId)` says what a lender must do on a loan:
+`'reply'`, `'sign'`, `'pause'` (approve or decline a pause) or `null`. The
+"needs your answer" pills and the dot on the borrower / lender switch both use it.
 
 ### Bank staff
 
