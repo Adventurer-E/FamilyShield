@@ -1,9 +1,9 @@
-import { formatDate, formatMoney, nextInstallment, repaymentSummary } from '@familyshield/core';
-import type { LoanCase } from '@familyshield/core';
+import { formatDate, formatMoney, isOpen, lenderSummary, nextInstallment, repaymentSummary } from '@familyshield/core';
+import type { Agreement, LoanCase, Offer } from '@familyshield/core';
 import { lenderNeedsAction, useFs } from '../context';
 import type { Role, Route } from '../context';
 import { Avatar, Button, NotEligible, Progress, Screen } from '../kit';
-import { ChevronIcon, DocIcon, LockIcon, StarIcon } from '../icons';
+import { ChevronIcon, StarIcon } from '../icons';
 
 /** Where the borrower's own loan should open, given its state. */
 export function borrowerRoute(loan: LoanCase): Route {
@@ -136,60 +136,125 @@ export function PilotSignup() {
   );
 }
 
-/**
- * Borrower home. Placeholder content reused from the old shared hub;
- * the real layout is ticket B1 (#27).
- */
-export function BorrowerHome() {
-  const { data, go } = useFs();
-  const { myLoan, profile } = data;
-  const open = myLoan && myLoan.status !== 'repaid';
+/** How one private offer stands, in the borrower's words. */
+function offerStatus(o: Offer): { text: string; pill: '' | 'brand' | 'solid' } {
+  if (o.status === 'offered') return o.accepted ? { text: 'Accepted', pill: 'solid' } : { text: 'Offered', pill: 'brand' };
+  if (o.status === 'pending') return { text: 'Waiting', pill: '' };
+  if (o.status === 'declined') return { text: 'Declined', pill: '' };
+  return { text: 'Expired', pill: '' };
+}
 
+/** The second line of an offer row. */
+function offerDetail(o: Offer): string {
+  if (o.status === 'offered') return formatMoney(o.amount);
+  if (o.status === 'pending') return 'No reply yet';
+  if (o.status === 'declined') return 'Not this time';
+  return 'Offer withdrawn';
+}
+
+/** Offers on my open request: who, how much, where it stands. */
+function OffersList({ loan }: { loan: LoanCase }) {
+  const { go, nameOf } = useFs();
   return (
-    <Screen title="FamilyShield" eyebrow={profile.account.label} root>
-      <RoleSwitch />
-      {myLoan ? <MyLoanCard loan={myLoan} /> : null}
+    <section aria-labelledby="fs-offers">
+      <h2 id="fs-offers" className="fs-section-title">Private offers</h2>
+      <div className="fs-card flush">
+        {loan.offers.map((o) => {
+          const st = offerStatus(o);
+          return (
+            <button key={o.memberId} type="button" className="fs-list-btn" onClick={() => go(borrowerRoute(loan))}>
+              <Avatar id={o.memberId} />
+              <span className="fs-grow">
+                <span style={{ display: 'block', fontWeight: 800 }}>{nameOf(o.memberId)}</span>
+                <span className="fs-small fs-muted">{offerDetail(o)}</span>
+              </span>
+              <span className={`fs-pill${st.pill ? ` ${st.pill}` : ''}`}>{st.text}</span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
-      {!open ? (
-        <section className="fs-card soft" aria-labelledby="fs-start">
+/** Where one agreement stands: who still has to sign, or how much is repaid. */
+function agreementStatus(loan: LoanCase, a: Agreement): string {
+  if (!a.borrowerSignedAt) return 'Waiting for your signature';
+  if (!a.lenderSignedAt) return 'Waiting for their signature';
+  const ls = lenderSummary(loan, a.lenderId);
+  if (loan.status === 'repaid' || ls.outstanding <= 0) return `Repaid in full · ${formatMoney(ls.lent)}`;
+  if (loan.status === 'signing') return 'Signed · waiting for the other lenders';
+  return `Repaid ${formatMoney(ls.received)} of ${formatMoney(ls.lent)}`;
+}
+
+/** One agreement per lender: amount, signed or not, and repayment progress. */
+function AgreementsList({ loan }: { loan: LoanCase }) {
+  const { go, nameOf } = useFs();
+  return (
+    <section aria-labelledby="fs-agreements">
+      <h2 id="fs-agreements" className="fs-section-title">Agreements &amp; repayment</h2>
+      <div className="fs-card flush">
+        {loan.agreements.map((a) => {
+          const ls = lenderSummary(loan, a.lenderId);
+          const signed = !!(a.borrowerSignedAt && a.lenderSignedAt);
+          return (
+            <button key={a.lenderId} type="button" className="fs-list-btn" onClick={() => go(borrowerRoute(loan))}>
+              <Avatar id={a.lenderId} />
+              <span className="fs-grow fs-stack" style={{ gap: 4 }}>
+                <span style={{ fontWeight: 800 }}>
+                  {nameOf(a.lenderId)} · {formatMoney(a.principal)}
+                </span>
+                <span className="fs-small fs-muted">{agreementStatus(loan, a)}</span>
+                {signed && loan.status !== 'signing' ? <Progress value={ls.progress} label={`Repaid to ${nameOf(a.lenderId)}`} /> : null}
+              </span>
+              <span className={`fs-pill${signed ? ' brand' : ''}`}>{signed ? 'Signed' : 'Waiting'}</span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** "Initiate new request": always shown; only one open request or loan at a time. */
+function NewRequest({ hasLoan }: { hasLoan: boolean }) {
+  const { data, go } = useFs();
+  const { eligible } = data.eligibility;
+  return (
+    <section className="fs-card soft" aria-labelledby="fs-start">
+      {hasLoan ? null : (
+        <>
           <div className="fs-small" style={{ fontWeight: 700, color: 'var(--fs-brand-strong)' }}>When life happens, you’re not alone.</div>
           <h2 id="fs-start" className="fs-h2">Get support from your trusted circle.</h2>
           <p className="fs-small" style={{ margin: 0, color: '#3B4659' }}>
             Ask privately, receive private offers and keep clear, signed terms, without leaving your bank.
           </p>
-          {data.eligibility.eligible ? (
-            <Button onClick={() => go({ name: 'request' })}>{myLoan ? 'Start a new request' : 'Start a request'}</Button>
-          ) : (
-            <NotEligible hideOpenLoan />
-          )}
-        </section>
-      ) : null}
+        </>
+      )}
+      {hasLoan ? <h2 id="fs-start" className="fs-section-title" style={{ margin: 0 }}>Need more help?</h2> : null}
+      <Button onClick={() => go({ name: 'request' })} disabled={!eligible}>
+        Initiate new request
+      </Button>
+      {eligible ? null : <NotEligible />}
+    </section>
+  );
+}
 
-      {myLoan ? (
-        <div className="fs-card flush">
-          <button type="button" className="fs-list-btn" onClick={() => go(borrowerRoute(myLoan))}>
-            <span className="fs-tile"><LockIcon /></span>
-            <span className="fs-grow">
-              <span style={{ display: 'block', fontWeight: 800 }}>Private offers</span>
-              <span className="fs-small fs-muted">
-                {myLoan.offers.filter((o) => o.status === 'offered').length} offers ·{' '}
-                {myLoan.offers.filter((o) => o.status !== 'pending').length} of {myLoan.offers.length} replied
-              </span>
-            </span>
-            <ChevronIcon size={18} stroke="#5A6478" />
-          </button>
-          <button type="button" className="fs-list-btn" onClick={() => go(myLoan.status === 'collecting' ? { name: 'agreement' } : borrowerRoute(myLoan))}>
-            <span className="fs-tile"><DocIcon /></span>
-            <span className="fs-grow">
-              <span style={{ display: 'block', fontWeight: 800 }}>Agreements &amp; repayment</span>
-              <span className="fs-small fs-muted">
-                {myLoan.status === 'collecting' ? 'Nothing signed yet' : myLoan.status === 'signing' ? 'Waiting for signatures' : myLoan.status === 'repaid' ? 'Fully repaid' : 'Signed · repayment on track'}
-              </span>
-            </span>
-            <ChevronIcon size={18} stroke="#5A6478" />
-          </button>
-        </div>
-      ) : null}
+/** Borrower home (B1): my request or loan, its offers and agreements, and a way to ask again. */
+export function BorrowerHome() {
+  const { data } = useFs();
+  const { myLoan, profile } = data;
+  const open = !!myLoan && isOpen(myLoan);
+  const showOffers = !!myLoan && myLoan.status === 'collecting' && myLoan.offers.length > 0;
+  const showAgreements = !!myLoan && myLoan.status !== 'cancelled' && myLoan.agreements.length > 0;
+
+  return (
+    <Screen title="FamilyShield" eyebrow={profile.account.label} root>
+      <RoleSwitch />
+      {myLoan && myLoan.status !== 'cancelled' ? <MyLoanCard loan={myLoan} /> : null}
+      {showOffers ? <OffersList loan={myLoan} /> : null}
+      {showAgreements ? <AgreementsList loan={myLoan} /> : null}
+      <NewRequest hasLoan={open} />
 
       {myLoan && myLoan.points > 0 ? (
         <section className="fs-card">
